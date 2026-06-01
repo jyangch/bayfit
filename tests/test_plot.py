@@ -1,7 +1,9 @@
 import matplotlib
+
 matplotlib.use('Agg')
 
 import numpy as np
+
 from curvefit.model.local import ln
 from curvefit.util.plot import Plot
 

@@ -1,4 +1,5 @@
 import numpy as np
+
 from curvefit.infer.statistic import Statistic
 
 
@@ -15,7 +16,7 @@ def test_chi_square_matches_manual():
     up = np.zeros(3, dtype=bool)
     params = [2.0, 0.0]
     my = lin(x, params)
-    expected = -0.5 * np.sum((y - my) ** 2 / 0.1 ** 2)
+    expected = -0.5 * np.sum((y - my) ** 2 / 0.1**2)
     got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
     assert np.isclose(got, expected)
 
@@ -28,7 +29,7 @@ def test_upper_limit_below_model_is_allowed():
     xerr = np.zeros((2, 1))
     w = np.ones(1)
     up = np.array([True])
-    params = [1.0, 0.0]   # model = 1.0 < y=5.0  -> allowed -> S=0
+    params = [1.0, 0.0]  # model = 1.0 < y=5.0  -> allowed -> S=0
     got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
     assert got == 0.0
 
@@ -40,7 +41,7 @@ def test_upper_limit_above_model_is_forbidden():
     xerr = np.zeros((2, 1))
     w = np.ones(1)
     up = np.array([True])
-    params = [1.0, 0.0]   # model = 1.0 > y=0.5 -> forbidden -> -inf
+    params = [1.0, 0.0]  # model = 1.0 > y=0.5 -> forbidden -> -inf
     got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
     assert got == -np.inf
 

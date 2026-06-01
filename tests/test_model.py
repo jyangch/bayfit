@@ -1,4 +1,5 @@
 import numpy as np
+
 from curvefit.model.local import ln, pl
 
 
@@ -16,7 +17,7 @@ def test_composite_add_eval():
     a.params['b'].val = 0.0
     b = pl()
     b.params['alpha'].val = 1.0
-    b.params['logA'].val = 0.0   # amplitude 1
+    b.params['logA'].val = 0.0  # amplitude 1
     model = a + b
     X = np.array([1.0, 2.0, 3.0])[:, None]
     # ln = x ; pl = x ; sum = 2x

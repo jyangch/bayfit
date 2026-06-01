@@ -1,7 +1,8 @@
 import numpy as np
+
 from curvefit.data.data import Data, DataUnit
-from curvefit.model.local import ln
 from curvefit.infer.pair import Pair
+from curvefit.model.local import ln
 
 
 def test_loglike_on_exact_linear_data():
@@ -14,7 +15,7 @@ def test_loglike_on_exact_linear_data():
     model = ln()
     model.params['k'].val = 2.0
     model.params['b'].val = 1.0
-    model.params['logv'].frozen = True   # unused by chi^2
+    model.params['logv'].frozen = True  # unused by chi^2
 
     pair = Pair(data, model)
     # model matches data exactly -> chi^2 ~ 0 -> loglike ~ 0

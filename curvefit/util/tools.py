@@ -1,14 +1,14 @@
-import json
-import numpy as np
-from io import BytesIO
-from .param import Par
-import streamlit as st
 from collections import OrderedDict
+from io import BytesIO
+import json
 
+import numpy as np
+import streamlit as st
+
+from .param import Par
 
 
 class JsonEncoder(json.JSONEncoder):
-
     def default(self, obj):
         if isinstance(obj, np.integer):
             return int(obj)
@@ -25,26 +25,25 @@ class JsonEncoder(json.JSONEncoder):
         elif isinstance(obj, BytesIO):
             return obj.name
         else:
-            return super(JsonEncoder, self).default(obj)
-        
-        
+            return super().default(obj)
+
+
 def json_dump(data, filepath):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=4, cls=JsonEncoder)
-        
+
 
 class SuperDict(OrderedDict):
-    
     def __getitem__(self, key):
-        
+
         if isinstance(key, int):
             if key < 1 or key > len(self):
-                raise IndexError("index out of range")
+                raise IndexError('index out of range')
             key = list(self.keys())[key - 1]
-            
+
         return super().__getitem__(key)
-    
-    
+
+
 def init_session_state():
     if 'data' not in st.session_state:
         st.session_state.data = {}

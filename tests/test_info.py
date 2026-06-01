@@ -1,5 +1,5 @@
-from curvefit.util.info import Info
 from curvefit.model.local import ln
+from curvefit.util.info import Info
 
 
 def test_from_list_dict_empty_returns_empty_table():

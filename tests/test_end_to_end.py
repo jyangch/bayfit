@@ -1,10 +1,12 @@
 import matplotlib
+
 matplotlib.use('Agg')
 
 import numpy as np
+
 from curvefit.data.data import Data, DataUnit
-from curvefit.model.local import ln
 from curvefit.infer.infer import Infer
+from curvefit.model.local import ln
 from curvefit.util.plot import Plot
 
 
