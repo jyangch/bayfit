@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from curvefit import Data, DataUnit, Infer, Plot
+from curvefit import Data, DataUnit, BayesInfer, Plot
 from curvefit.model.local import ln
 
 savepath = './quickstart'
@@ -19,11 +19,10 @@ print(data)
 
 model = ln()
 model.params['logv'].frozen = True
-print(model.par_info.table)
+print(model)
 
-infer = Infer([(data, model)])
-print(infer.par_info.table)
-print(infer.stat_info.table)
+infer = BayesInfer([(data, model)])
+print(infer)
 
 post = infer.emcee(nstep=2000, discard=500, resume=False, savepath=savepath)
 print(post)

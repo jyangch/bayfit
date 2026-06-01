@@ -61,7 +61,10 @@ class Info(object):
         
         if not isinstance(list_dict, list):
             raise TypeError('expected an instance of list')
-        
+
+        if len(list_dict) == 0:
+            return cls({})
+
         if not isinstance(list_dict[0], dict):
             raise TypeError('expected an instance of dict')
         
