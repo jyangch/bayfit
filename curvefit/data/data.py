@@ -230,6 +230,10 @@ class DataUnit(object):
             return np.full(n, float(weight))
 
         weight = np.asarray(weight, dtype=float)
+
+        if weight.ndim == 0:
+            return np.full(n, float(weight))
+
         if weight.shape[0] != n:
             raise ValueError('weight length does not match data')
 

@@ -60,3 +60,11 @@ def test_data_container():
     assert list(data.npoints) == [2, 2]
     assert 'a' in data
     assert data['b'].stat == 'vdr'
+
+
+def test_weight_accepts_zero_d_array():
+    import numpy as np
+    u = DataUnit([1, 2, 3], [4, 5, 6], weight=np.float64(2.0))
+    assert np.allclose(u.weight, [2.0, 2.0, 2.0])
+    u2 = DataUnit([1, 2, 3], [4, 5, 6], weight=np.array(3.0))
+    assert np.allclose(u2.weight, [3.0, 3.0, 3.0])
