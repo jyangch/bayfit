@@ -652,5 +652,11 @@ class Infer(object):
         nll = lambda *args: -2 * self._loglike(*args)
         pos = self.free_pvalues + 1e-4 * np.random.randn(self.free_nparams)
         soln = minimize(nll, pos, method=method, bounds=self.free_pranges)
-        
+
         return soln.x
+
+
+
+class BayesInfer(Infer):
+
+    pass
