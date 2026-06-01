@@ -292,111 +292,45 @@ class Infer(object):
         
         
     @property
-    def data_chbin_mean(self):
-        
-        return [value for data in self.Data for value in data.rsp_chbin_mean]
-    
-    
+    def data_x(self):
+
+        return [unit.x for pair in self.Pair for unit in pair.data.data.values()]
+
+
     @property
-    def data_re_chbin_mean(self):
-        
-        return [value for data in self.Data for value in data.rsp_re_chbin_mean]
-    
-    
+    def data_y(self):
+
+        return [unit.y for pair in self.Pair for unit in pair.data.data.values()]
+
+
     @property
-    def data_chbin_width(self):
-        
-        return [value for data in self.Data for value in data.rsp_chbin_width]
-    
-    
+    def data_xerr(self):
+
+        return [unit.xerr for pair in self.Pair for unit in pair.data.data.values()]
+
+
     @property
-    def data_re_chbin_width(self):
-        
-        return [value for data in self.Data for value in data.rsp_re_chbin_width]
-    
-    
+    def data_yerr(self):
+
+        return [unit.yerr for pair in self.Pair for unit in pair.data.data.values()]
+
+
     @property
-    def data_ctsrate(self):
-        
-        return [value for data in self.Data for value in data.net_ctsrate]
-    
-    
+    def data_up(self):
+
+        return [unit.up for pair in self.Pair for unit in pair.data.data.values()]
+
+
     @property
-    def data_re_ctsrate(self):
-        
-        return [value for data in self.Data for value in data.net_re_ctsrate]
-    
-    
-    @property
-    def data_ctsrate_error(self):
-        
-        return [value for data in self.Data for value in data.net_ctsrate_error]
-    
-    
-    @property
-    def data_re_ctsrate_error(self):
-        
-        return [value for data in self.Data for value in data.net_re_ctsrate_error]
-    
-    
-    @property
-    def data_ctsspec(self):
-        
-        return [value for data in self.Data for value in data.net_ctsspec]
-    
-    
-    @property
-    def data_re_ctsspec(self):
-        
-        return [value for data in self.Data for value in data.net_re_ctsspec]
-    
-    
-    @property
-    def data_ctsspec_error(self):
-        
-        return [value for data in self.Data for value in data.net_ctsspec_error]
-    
-    
-    @property
-    def data_re_ctsspec_error(self):
-        
-        return [value for data in self.Data for value in data.net_re_ctsspec_error]
-    
-    
-    @property
-    def model_ctsrate(self):
-        
-        return [value for model in self.Model for value in model.conv_ctsrate]
-    
-    
-    @property
-    def model_re_ctsrate(self):
-        
-        return [value for model in self.Model for value in model.conv_re_ctsrate]
-    
-    
-    @property
-    def model_ctsspec(self):
-        
-        return [value for model in self.Model for value in model.conv_ctsspec]
-    
-    
-    @property
-    def model_re_ctsspec(self):
-        
-        return [value for model in self.Model for value in model.conv_re_ctsspec]
-    
-    
-    @property
-    def model_phtspec(self):
-        
-        return [value for model in self.Model for value in model.phtspec_at_rsp]
-    
-    
-    @property
-    def model_cts_to_pht(self):
-        
-        return [value for model in self.Model for value in model.cts_to_pht]
+    def model_y(self):
+
+        ys = list()
+        for pair in self.Pair:
+            params = pair.pvalues
+            for unit in pair.data.data.values():
+                ys.append(pair.mo_func(unit.x, params))
+
+        return ys
 
 
     @property
