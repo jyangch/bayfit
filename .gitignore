@@ -49,3 +49,6 @@ Icon?
 *.egg-info/
 build/
 dist/
+
+# example run output
+quickstart/
