@@ -1,7 +1,8 @@
 import numpy as np
+
 from curvefit.data.data import Data, DataUnit
-from curvefit.model.local import ln
 from curvefit.infer.infer import Infer
+from curvefit.model.local import ln
 
 
 def _make_infer():
@@ -15,14 +16,14 @@ def _make_infer():
 
 
 def test_free_params_and_dof():
-    infer, data, model = _make_infer()
+    infer, _data, _model = _make_infer()
     # k, b free; logv frozen
     assert infer.free_nparams == 2
     assert infer.dof == 4 - 2
 
 
 def test_calc_loglike_best_at_truth():
-    infer, data, model = _make_infer()
+    infer, _data, _model = _make_infer()
     ll_truth = infer._loglike([2.0, 1.0])
     ll_off = infer._loglike([0.0, 0.0])
     assert ll_truth > ll_off
@@ -30,7 +31,7 @@ def test_calc_loglike_best_at_truth():
 
 
 def test_generic_data_properties():
-    infer, data, model = _make_infer()
+    infer, _data, _model = _make_infer()
     assert np.allclose(infer.data_x[0], [0, 1, 2, 3])
     assert np.allclose(infer.data_y[0], [1, 3, 5, 7])
     infer.at_par([2.0, 1.0])

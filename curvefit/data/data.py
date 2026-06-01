@@ -1,24 +1,22 @@
-import json
+from collections import OrderedDict
 import inspect
+import json
+
 import numpy as np
 import pandas as pd
+
 from ..util.info import Info
-from collections import OrderedDict
 
 
-
-class Data(object):
-
+class Data:
     def __init__(self, data=None):
 
         self.data = data
-
 
     @property
     def data(self):
 
         return self._data
-
 
     @data.setter
     def data(self, new_data):
@@ -44,7 +42,6 @@ class Data(object):
         else:
             raise ValueError('unsupported data type')
 
-
     def _setitem(self, key, value):
 
         if not isinstance(value, DataUnit):
@@ -53,40 +50,35 @@ class Data(object):
         value.name = key
         self._data[key] = value
 
-
     def _extract(self):
 
         if self.data is None:
             raise ValueError('data is None')
 
-        self.exprs = [key for key in self.data.keys()]
+        self.exprs = [key for key in self.data]
         self.stats = [unit.stat for unit in self.data.values()]
         self.npoints = np.array([unit.npoint for unit in self.data.values()])
-
 
     @property
     def expr(self):
 
         return self.get_obj_name() or 'data'
 
-
     @property
     def pdicts(self):
 
         return OrderedDict()
 
-
     @property
     def info(self):
 
         info_dict = OrderedDict()
-        info_dict['Name'] = [key for key in self.data.keys()]
+        info_dict['Name'] = [key for key in self.data]
         info_dict['Npoint'] = [unit.npoint for unit in self.data.values()]
         info_dict['Statistic'] = [unit.stat for unit in self.data.values()]
         info_dict['Upperlimit'] = [int(np.sum(unit.up)) for unit in self.data.values()]
 
         return Info.from_dict(info_dict)
-
 
     @property
     def fit_with(self):
@@ -94,8 +86,7 @@ class Data(object):
         try:
             return self._fit_with
         except AttributeError:
-            raise AttributeError('no model fit with')
-
+            raise AttributeError('no model fit with') from None
 
     @fit_with.setter
     def fit_with(self, new_model):
@@ -108,13 +99,12 @@ class Data(object):
             raise ValueError('fit_with argument should be Model type!')
 
         try:
-            self._fit_with.fit_to
+            _ = self._fit_with.fit_to
         except AttributeError:
             self._fit_with.fit_to = self
         else:
             if self._fit_with.fit_to != self:
                 self._fit_with.fit_to = self
-
 
     def get_obj_name(self):
 
@@ -134,28 +124,23 @@ class Data(object):
 
         return None
 
-
     def __getitem__(self, key):
 
         return self._data[key]
-
 
     def __setitem__(self, key, value):
 
         self._setitem(key, value)
         self._extract()
 
-
     def __delitem__(self, key):
 
         del self._data[key]
         self._extract()
 
-
     def __contains__(self, key):
 
         return key in self._data
-
 
     def __str__(self):
 
@@ -164,20 +149,8 @@ class Data(object):
         return ''
 
 
-
-class DataUnit(object):
-
-    def __init__(
-        self,
-        x,
-        y,
-        xerr=None,
-        yerr=None,
-        weight=1,
-        up=None,
-        stat='chi^2',
-        name=None
-        ):
+class DataUnit:
+    def __init__(self, x, y, xerr=None, yerr=None, weight=1, up=None, stat='chi^2', name=None):
 
         self.x = np.asarray(x, dtype=float)
         self.y = np.asarray(y, dtype=float)
@@ -191,7 +164,6 @@ class DataUnit(object):
 
         if name is not None:
             self.name = name
-
 
     def _normalize_err(self, err, default):
 
@@ -221,7 +193,6 @@ class DataUnit(object):
 
         raise ValueError('unsupported error shape')
 
-
     def _normalize_weight(self, weight):
 
         n = self.npoint
@@ -239,7 +210,6 @@ class DataUnit(object):
 
         return weight
 
-
     def _normalize_up(self, up):
 
         n = self.npoint
@@ -253,7 +223,6 @@ class DataUnit(object):
 
         return up
 
-
     @classmethod
     def from_dict(cls, d, **kwargs):
 
@@ -266,8 +235,8 @@ class DataUnit(object):
             up=d.get('up'),
             stat=d.get('stat', 'chi^2'),
             name=d.get('name'),
-            **kwargs)
-
+            **kwargs,
+        )
 
     @classmethod
     def from_dataframe(
@@ -284,19 +253,17 @@ class DataUnit(object):
         weight=None,
         up=None,
         stat='chi^2',
-        name=None
-        ):
+        name=None,
+    ):
 
         def col(c):
             return None if c is None else np.asarray(df[c], dtype=float)
 
         # auto-detect standard column names when not explicitly specified
-        if xerr is None and xerr_low is None and xerr_high is None:
-            if 'xerr' in df.columns:
-                xerr = 'xerr'
-        if yerr is None and yerr_low is None and yerr_high is None:
-            if 'yerr' in df.columns:
-                yerr = 'yerr'
+        if xerr is None and xerr_low is None and xerr_high is None and 'xerr' in df.columns:
+            xerr = 'xerr'
+        if yerr is None and yerr_low is None and yerr_high is None and 'yerr' in df.columns:
+            yerr = 'yerr'
 
         xe = cls._cols_to_err(col(xerr), col(xerr_low), col(xerr_high))
         ye = cls._cols_to_err(col(yerr), col(yerr_low), col(yerr_high))
@@ -304,7 +271,6 @@ class DataUnit(object):
         u = None if up is None else np.asarray(df[up], dtype=bool)
 
         return cls(col(x), col(y), xerr=xe, yerr=ye, weight=w, up=u, stat=stat, name=name)
-
 
     @staticmethod
     def _cols_to_err(sym, low, high):
@@ -315,7 +281,6 @@ class DataUnit(object):
             return sym
         return None
 
-
     @classmethod
     def from_json(cls, path, **kwargs):
 
@@ -324,14 +289,12 @@ class DataUnit(object):
 
         return cls.from_dict(d, **kwargs)
 
-
     @classmethod
     def from_csv(cls, path, **kwargs):
 
         df = pd.read_csv(path)
 
         return cls.from_dataframe(df, **kwargs)
-
 
     @property
     def name(self):
@@ -341,12 +304,10 @@ class DataUnit(object):
         except AttributeError:
             return self.get_obj_name()
 
-
     @name.setter
     def name(self, new_name):
 
         self._name = new_name
-
 
     @property
     def info(self):
@@ -356,11 +317,11 @@ class DataUnit(object):
         info_dict['stat'] = self.stat
         info_dict['upperlimit'] = int(np.sum(self.up))
 
-        info_dict = OrderedDict([('property', list(info_dict.keys())),
-                                 (self.name, list(info_dict.values()))])
+        info_dict = OrderedDict(
+            [('property', list(info_dict.keys())), (self.name, list(info_dict.values()))]
+        )
 
         return Info.from_dict(info_dict)
-
 
     def get_obj_name(self):
 
@@ -379,7 +340,6 @@ class DataUnit(object):
             return possible_var_names[-1]
 
         return None
-
 
     def __str__(self):
 

@@ -1,10 +1,8 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
-
-class Plot(object):
-
+class Plot:
     @staticmethod
     def model(model, x, ax=None):
 
@@ -23,13 +21,12 @@ class Plot(object):
 
         return fig
 
-
     @staticmethod
     def infer(post, nsample=200, ngrid=200, seed=42):
 
         fig, (ax, axr) = plt.subplots(
-            2, 1, sharex=True, figsize=(7, 6),
-            gridspec_kw={'height_ratios': [3, 1]})
+            2, 1, sharex=True, figsize=(7, 6), gridspec_kw={'height_ratios': [3, 1]}
+        )
 
         xmins, xmaxs = list(), list()
         for pair in post.Pair:
@@ -50,17 +47,15 @@ class Plot(object):
         for pair in post.Pair:
             curves = list()
             for k in idx:
-                post.at_par(samples[k, :post.free_nparams])
+                post.at_par(samples[k, : post.free_nparams])
                 curves.append(pair.mo_func(grid, pair.pvalues))
             bands[id(pair)] = np.quantile(np.array(curves), [0.16, 0.84], axis=0)
 
         post.at_par(post.par_best_ci)
 
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        ci = 0
-        for pair in post.Pair:
+        for ci, pair in enumerate(post.Pair):
             color = colors[ci % len(colors)]
-            ci += 1
 
             ax.plot(grid, best[id(pair)], color=color, lw=1.5)
             lo, hi = bands[id(pair)]
@@ -68,20 +63,41 @@ class Plot(object):
 
             for unit in pair.data.data.values():
                 norm = ~unit.up
-                ax.errorbar(unit.x[norm], unit.y[norm],
-                            yerr=[unit.yerr[0][norm], unit.yerr[1][norm]],
-                            xerr=[unit.xerr[0][norm], unit.xerr[1][norm]],
-                            fmt='o', color=color, ms=3, lw=1, capsize=0)
+                ax.errorbar(
+                    unit.x[norm],
+                    unit.y[norm],
+                    yerr=[unit.yerr[0][norm], unit.yerr[1][norm]],
+                    xerr=[unit.xerr[0][norm], unit.xerr[1][norm]],
+                    fmt='o',
+                    color=color,
+                    ms=3,
+                    lw=1,
+                    capsize=0,
+                )
 
                 if np.any(unit.up):
-                    ax.errorbar(unit.x[unit.up], unit.y[unit.up],
-                                yerr=0.1 * np.abs(unit.y[unit.up]),
-                                uplims=True, fmt='v', color=color, ms=6)
+                    ax.errorbar(
+                        unit.x[unit.up],
+                        unit.y[unit.up],
+                        yerr=0.1 * np.abs(unit.y[unit.up]),
+                        uplims=True,
+                        fmt='v',
+                        color=color,
+                        ms=6,
+                    )
 
                 my = pair.mo_func(unit.x, pair.pvalues)
                 sigma = np.where(unit.y < my, unit.yerr[1], unit.yerr[0])
-                axr.errorbar(unit.x[norm], ((unit.y - my) / sigma)[norm],
-                             yerr=1, fmt='o', color=color, ms=3, lw=1, capsize=0)
+                axr.errorbar(
+                    unit.x[norm],
+                    ((unit.y - my) / sigma)[norm],
+                    yerr=1,
+                    fmt='o',
+                    color=color,
+                    ms=3,
+                    lw=1,
+                    capsize=0,
+                )
 
         axr.axhline(0, color='gray', lw=1, ls='--')
         ax.set_ylabel('y')
@@ -91,13 +107,12 @@ class Plot(object):
 
         return fig
 
-
     @staticmethod
     def post_corner(post, **kwargs):
 
         import corner
 
-        samples = post.posterior_sample[:, :post.free_nparams]
+        samples = post.posterior_sample[:, : post.free_nparams]
         labels = post.free_plabels
 
         return corner.corner(samples, labels=labels, **kwargs)

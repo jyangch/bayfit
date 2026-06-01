@@ -1,7 +1,9 @@
 import json
+
 import numpy as np
 import pandas as pd
-from curvefit.data.data import DataUnit, Data
+
+from curvefit.data.data import Data, DataUnit
 
 
 def test_defaults_and_shapes():
@@ -10,8 +12,8 @@ def test_defaults_and_shapes():
     assert u.xerr.shape == (2, 3)
     assert u.yerr.shape == (2, 3)
     assert np.all(u.xerr == 0)
-    assert np.all(u.yerr == 1)        # no yerr -> OLS
-    assert np.all(u.up == False)
+    assert np.all(u.yerr == 1)  # no yerr -> OLS
+    assert np.all(~u.up)
     assert np.all(u.weight == 1)
     assert u.stat == 'chi^2'
 
@@ -20,7 +22,7 @@ def test_symmetric_and_asymmetric_errors():
     u = DataUnit([1, 2], [3, 4], yerr=[0.5, 0.5])
     assert np.allclose(u.yerr, [[0.5, 0.5], [0.5, 0.5]])
     a = DataUnit([1, 2], [3, 4], yerr=[[0.1, 0.2], [0.3, 0.4]])
-    assert np.allclose(a.yerr, [[0.1, 0.2], [0.3, 0.4]])   # (2, n) low/high
+    assert np.allclose(a.yerr, [[0.1, 0.2], [0.3, 0.4]])  # (2, n) low/high
 
 
 def test_from_dict():
@@ -30,8 +32,7 @@ def test_from_dict():
 
 
 def test_from_dataframe_asymmetric():
-    df = pd.DataFrame({'x': [1, 2], 'y': [3, 4],
-                       'yl': [0.1, 0.2], 'yh': [0.3, 0.4]})
+    df = pd.DataFrame({'x': [1, 2], 'y': [3, 4], 'yl': [0.1, 0.2], 'yh': [0.3, 0.4]})
     u = DataUnit.from_dataframe(df, yerr_low='yl', yerr_high='yh')
     assert np.allclose(u.yerr, [[0.1, 0.2], [0.3, 0.4]])
 
@@ -46,7 +47,8 @@ def test_from_csv(tmp_path):
 
 def test_from_json(tmp_path):
     p = tmp_path / 'd.json'
-    json.dump({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.1]}, open(p, 'w'))
+    with open(p, 'w') as f:
+        json.dump({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.1]}, f)
     u = DataUnit.from_json(str(p))
     assert u.npoint == 2
 
@@ -64,6 +66,7 @@ def test_data_container():
 
 def test_weight_accepts_zero_d_array():
     import numpy as np
+
     u = DataUnit([1, 2, 3], [4, 5, 6], weight=np.float64(2.0))
     assert np.allclose(u.weight, [2.0, 2.0, 2.0])
     u2 = DataUnit([1, 2, 3], [4, 5, 6], weight=np.array(3.0))
