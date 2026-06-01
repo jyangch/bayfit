@@ -334,16 +334,16 @@ class CompositeModel(Model):
         return '\n'.join([f'{expr}: {mo.comment}' for expr, mo in self.mdicts.items()])
 
 
-    def func(self, E, T=None, O=None):
-        
+    def func(self, X):
+
         if self.op == '+':
-            return self.m1.func(E, T, O) + self.m2.func(E, T, O)
+            return self.m1.func(X) + self.m2.func(X)
         elif self.op == '-':
-            return self.m1.func(E, T, O) - self.m2.func(E, T, O)
+            return self.m1.func(X) - self.m2.func(X)
         elif self.op == '*':
-            return self.m1.func(E, T, O) * self.m2.func(E, T, O)
+            return self.m1.func(X) * self.m2.func(X)
         elif self.op == '/':
-            return self.m1.func(E, T, O) / self.m2.func(E, T, O)
+            return self.m1.func(X) / self.m2.func(X)
         else:
             raise ValueError(f'Unknown operation: {self.op}')
         
