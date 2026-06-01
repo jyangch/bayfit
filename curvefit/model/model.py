@@ -339,6 +339,62 @@ class CompositeModel(Model):
         return f'({self.m1.expr}{self.op}{self.m2.expr})'
 
     @property
+    def tdict(self):
+
+        return {
+            'add+add': 'add',
+            'add+mul': False,
+            'add+math': 'add',
+            'mul+add': False,
+            'mul+mul': 'mul',
+            'mul+math': 'mul',
+            'math+add': 'add',
+            'math+mul': 'mul',
+            'math+math': 'math',
+            'add-add': 'add',
+            'add-mul': False,
+            'add-math': 'add',
+            'mul-add': False,
+            'mul-mul': 'mul',
+            'mul-math': 'mul',
+            'math-add': 'add',
+            'math-mul': 'mul',
+            'math-math': 'math',
+            'add*add': False,
+            'add*mul': 'add',
+            'add*math': 'add',
+            'mul*add': 'add',
+            'mul*mul': 'mul',
+            'mul*math': 'mul',
+            'math*add': 'add',
+            'math*mul': 'mul',
+            'math*math': 'math',
+            'add/add': False,
+            'add/mul': 'add',
+            'add/math': 'add',
+            'mul/add': False,
+            'mul/mul': 'mul',
+            'mul/math': 'mul',
+            'math/add': False,
+            'math/mul': 'mul',
+            'math/math': 'math',
+        }
+
+    @property
+    def type(self):
+
+        assert self.m1.type in self._allowed_types, f'unsupported model.type: {self.m1.type}'
+        assert self.m2.type in self._allowed_types, f'unsupported model.type: {self.m2.type}'
+
+        type_op = f'{self.m1.type}{self.op}{self.m2.type}'
+
+        if not self.tdict.get(type_op, False):
+            msg = f'unsupported model.type {(self.m1.type, self.m2.type)} for {self.op}'
+            raise ValueError(msg)
+        else:
+            return self.tdict[type_op]
+
+    @property
     def comment(self):
 
         return '\n'.join([f'{expr}: {mo.comment}' for expr, mo in self.mdicts.items()])

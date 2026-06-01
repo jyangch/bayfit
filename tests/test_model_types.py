@@ -27,3 +27,30 @@ def test_type_setter_is_noop_on_subclasses():
 
 def test_base_model_default_type():
     assert Model().type == 'add'
+
+
+def test_composite_type_add_plus_add():
+    from curvefit.model.local import ln, pl
+
+    assert (ln() + pl()).type == 'add'
+
+
+def test_composite_type_add_times_mul():
+    from curvefit.model.local import expcut, pl
+
+    assert (pl() * expcut()).type == 'add'
+
+
+def test_illegal_composite_raises():
+    import pytest
+
+    from curvefit.model.local import ln, pl
+
+    with pytest.raises(ValueError):
+        _ = (ln() * pl()).type  # add * add is illegal
+
+
+def test_const_plus_add_is_add():
+    from curvefit.model.local import const, ln
+
+    assert (ln() + const()).type == 'add'
