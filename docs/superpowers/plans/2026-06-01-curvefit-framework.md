@@ -936,8 +936,8 @@ def test_loglike_on_exact_linear_data():
     data = Data([('d', unit)])
 
     model = ln()
-    model.params['k'].value = 2.0
-    model.params['b'].value = 1.0
+    model.params['k'].val = 2.0
+    model.params['b'].val = 1.0
     model.params['logv'].frozen = True   # unused by chi^2
 
     pair = Pair(data, model)
@@ -954,8 +954,8 @@ def test_loglike_penalizes_bad_fit():
     data = Data([('d', unit)])
 
     model = ln()
-    model.params['k'].value = 0.0
-    model.params['b'].value = 0.0
+    model.params['k'].val = 0.0
+    model.params['b'].val = 0.0
     pair = Pair(data, model)
     assert pair.loglike < 0.0
 ```
@@ -1037,7 +1037,7 @@ class Pair(object):
     @property
     def pvalues(self):
         
-        return [par.value for par in self.model.par.values()]
+        return [par.val for par in self.model.par.values()]
 
 
     def _stat_calculate(self):
