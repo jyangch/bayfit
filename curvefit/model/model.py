@@ -10,6 +10,8 @@ from ..util.tools import SuperDict
 
 
 class Model:
+    _allowed_types = ('add', 'mul', 'conv', 'math')
+
     def __init__(self):
 
         self.expr = 'model'
@@ -19,6 +21,8 @@ class Model:
         self.params['p'] = Par(1, unif(0, 2))
 
         self.config = OrderedDict()
+
+        self.type = 'add'
 
     def func(self, X):
         pass
@@ -247,7 +251,43 @@ class Model:
         return ''
 
 
-class FrozenConst(Model):
+class Additive(Model):
+    @property
+    def type(self):
+
+        return 'add'
+
+    @type.setter
+    def type(self, new_type):
+
+        pass
+
+
+class Multiplicative(Model):
+    @property
+    def type(self):
+
+        return 'mul'
+
+    @type.setter
+    def type(self, new_type):
+
+        pass
+
+
+class Mathematic(Model):
+    @property
+    def type(self):
+
+        return 'math'
+
+    @type.setter
+    def type(self, new_type):
+
+        pass
+
+
+class FrozenConst(Mathematic):
     def __init__(self, value):
         super().__init__()
 
