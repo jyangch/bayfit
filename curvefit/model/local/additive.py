@@ -1,17 +1,14 @@
 from collections import OrderedDict
-from os.path import abspath, dirname
 
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from ..util.param import Par
-from ..util.prior import unif
-from .model import Model
-
-docs_path = dirname(dirname(dirname(abspath(__file__)))) + '/docs'
+from ...util.param import Par
+from ...util.prior import unif
+from ..model import Additive
 
 
-class ln(Model):
+class ln(Additive):
     def __init__(self):
         super().__init__()
 
@@ -33,7 +30,7 @@ class ln(Model):
         return k * x + b
 
 
-class pl(Model):
+class pl(Additive):
     def __init__(self):
         super().__init__()
 
@@ -54,7 +51,7 @@ class pl(Model):
         return 10**logA * x**alpha
 
 
-class expd(Model):
+class expd(Additive):
     def __init__(self):
         super().__init__()
 
@@ -75,7 +72,7 @@ class expd(Model):
         return 10**logA * np.exp(-x / tau)
 
 
-class bln(Model):
+class bln(Additive):
     def __init__(self, seg):
         super().__init__()
 
@@ -207,7 +204,7 @@ class bln(Model):
         )
 
 
-class bpl(Model):
+class bpl(Additive):
     def __init__(self, seg):
         super().__init__()
 
@@ -339,7 +336,7 @@ class bpl(Model):
         )
 
 
-class sbpl(Model):
+class sbpl(Additive):
     def __init__(self, seg):
         super().__init__()
 
@@ -449,7 +446,7 @@ class sbpl(Model):
         return F1234
 
 
-class spindown(Model):
+class spindown(Additive):
     def __init__(self):
         super().__init__()
 
@@ -504,7 +501,7 @@ class spindown(Model):
         return eta / fb * Bp**2 * R_**6 * Omega**4 / (6 * c_**3)
 
 
-class psd(Model):
+class psd(Additive):
     def __init__(self, expr):
         super().__init__()
 
@@ -584,17 +581,3 @@ class psd(Model):
         Pnu = Aw + A1 / (1 + (nu - nu1) ** 2 / dnu1**2) + A2 / (1 + (nu - nu2) ** 2 / dnu2**2)
 
         return Pnu
-
-
-local_models = {
-    name: cls
-    for name, cls in globals().items()
-    if isinstance(cls, type) and issubclass(cls, Model) and name not in ['Model']
-}
-
-
-def list_local_models():
-    return list(local_models.keys())
-
-
-__all__ = [*local_models.keys(), 'list_local_models', 'local_models']
