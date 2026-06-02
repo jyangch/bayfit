@@ -35,3 +35,25 @@ def test_loglike_penalizes_bad_fit():
     model.params['b'].val = 0.0
     pair = Pair(data, model)
     assert pair.loglike < 0.0
+
+
+def test_pair_pseudo_residual_matches_stat():
+    import numpy as np
+
+    from curvefit.data.data import Data, DataUnit
+    from curvefit.infer.pair import Pair
+    from curvefit.model.local import ln
+
+    x = np.array([0.0, 1.0, 2.0, 3.0])
+    y = 2.0 * x + 1.0
+    unit = DataUnit(x, y, yerr=np.full(4, 0.1), stat='chi^2')
+    data = Data([('d', unit)])
+    model = ln()
+    model.params['k'].val = 2.5
+    model.params['b'].val = 0.5
+    pair = Pair(data, model)
+
+    pr = pair.pseudo_residual
+    # for chi^2, sum(pseudo_residual**2) equals the total stat
+    assert np.isclose(np.sum(pr**2), pair.stat)
+    assert np.isclose(pair.loglike, -0.5 * pair.stat)
