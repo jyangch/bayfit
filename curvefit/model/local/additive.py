@@ -1,3 +1,12 @@
+"""Additive curve components for generic x/y curve fitting.
+
+Each class implements a concrete analytic family (linear, power-law,
+exponential decay, broken lines, broken power-laws, smoothly broken
+power-laws, magnetar spin-down, power spectral density) and returns the
+model value from :meth:`func`. The input ``X`` is a 2-D array whose
+first column ``X[:, 0]`` carries the x-grid.
+"""
+
 from collections import OrderedDict
 
 import numpy as np
@@ -9,7 +18,10 @@ from ..model import Additive
 
 
 class ln(Additive):
+    """Linear curve :math:`y = k x + b`."""
+
     def __init__(self):
+        """Initialise linear model with slope ``k``, intercept ``b``, log-variance ``logv``."""
         super().__init__()
 
         self.expr = 'ln'
@@ -21,7 +33,14 @@ class ln(Additive):
         self.params['logv'] = Par(0, unif(-10, 10))
 
     def func(self, X):
+        r"""Return the linear model :math:`k x + b` evaluated on ``X[:, 0]``.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+        """
         x = X[:, 0]
 
         k = self.params['k'].value
@@ -31,7 +50,10 @@ class ln(Additive):
 
 
 class pl(Additive):
+    r"""Power-law curve :math:`y = 10^{\mathrm{logA}} \, x^{\alpha}`."""
+
     def __init__(self):
+        """Initialise power-law model with index ``alpha`` and log-amplitude ``logA``."""
         super().__init__()
 
         self.expr = 'pl'
@@ -42,7 +64,14 @@ class pl(Additive):
         self.params['logA'] = Par(0, unif(-10, 10))
 
     def func(self, X):
+        r"""Return the power-law :math:`10^{\mathrm{logA}} \, x^{\alpha}` on ``X[:, 0]``.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+        """
         x = X[:, 0]
 
         alpha = self.params['alpha'].value
@@ -52,7 +81,10 @@ class pl(Additive):
 
 
 class expd(Additive):
+    r"""Exponential decay curve :math:`y = 10^{\mathrm{logA}} \, e^{-x/\tau}`."""
+
     def __init__(self):
+        """Initialise exponential decay model with timescale ``tau`` and log-amplitude ``logA``."""
         super().__init__()
 
         self.expr = 'expd'
@@ -63,7 +95,14 @@ class expd(Additive):
         self.params['logA'] = Par(0, unif(-10, 10))
 
     def func(self, X):
+        r"""Return the exponential decay :math:`10^{\mathrm{logA}} e^{-x/\tau}` on ``X[:, 0]``.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+        """
         x = X[:, 0]
 
         tau = self.params['tau'].value
@@ -73,7 +112,17 @@ class expd(Additive):
 
 
 class bln(Additive):
+    """Broken lines: piecewise-linear curve with 1-4 segments joined at break points."""
+
     def __init__(self, seg):
+        """Initialise the broken-line model for the requested number of segments.
+
+        Args:
+            seg: Number of linear segments; must be an integer in ``{1, 2, 3, 4}``.
+
+        Raises:
+            ValueError: If ``seg`` is not an integer, or is outside ``{1, 2, 3, 4}``.
+        """
         super().__init__()
 
         if not isinstance(seg, int):
@@ -117,7 +166,17 @@ class bln(Additive):
             raise ValueError('unsupported seg value')
 
     def func(self, X):
+        """Return the broken-line curve dispatched to the appropriate segment helper.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+
+        Raises:
+            ValueError: If ``self.seg`` is outside the supported range ``{1, 2, 3, 4}``.
+        """
         x = X[:, 0]
         theta = [par.value for par in self.params.values()]
 
@@ -138,7 +197,21 @@ class bln(Additive):
 
     @staticmethod
     def b1ln(x, theta):
+        """Return a single-segment line ``k1 * x + b``.
 
+        The ``b1ln``, ``b2ln``, ``b3ln``, and ``b4ln`` family evaluate the
+        corresponding 1-4 segment broken-line model on raw arrays.  Each
+        segment is continuous: the value at each break point is inherited by
+        the next segment so the curve has no discontinuities.
+
+        Args:
+            x: 1-D x-grid array.
+            theta: Flat list of parameter values in the order used by the
+                parent ``bln`` ``params`` dict for the matching ``seg``.
+
+        Returns:
+            1-D array of the same shape as ``x``.
+        """
         x = np.array(x)
         k1, b = theta
 
@@ -205,7 +278,17 @@ class bln(Additive):
 
 
 class bpl(Additive):
+    """Broken power-laws: piecewise power-law curve with 1-4 segments joined at break points."""
+
     def __init__(self, seg):
+        """Initialise the broken power-law model for the requested number of segments.
+
+        Args:
+            seg: Number of power-law segments; must be an integer in ``{1, 2, 3, 4}``.
+
+        Raises:
+            ValueError: If ``seg`` is not an integer, or is outside ``{1, 2, 3, 4}``.
+        """
         super().__init__()
 
         if not isinstance(seg, int):
@@ -249,7 +332,17 @@ class bpl(Additive):
             raise ValueError('unsupported seg value')
 
     def func(self, X):
+        """Return the broken power-law curve dispatched to the appropriate segment helper.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+
+        Raises:
+            ValueError: If ``self.seg`` is outside the supported range ``{1, 2, 3, 4}``.
+        """
         x = X[:, 0]
         theta = [par.value for par in self.params.values()]
 
@@ -270,7 +363,21 @@ class bpl(Additive):
 
     @staticmethod
     def b1pl(x, theta):
+        """Return a single-segment power-law :math:`10^{\\mathrm{logA}} x^{k_1}`.
 
+        The ``b1pl``, ``b2pl``, ``b3pl``, and ``b4pl`` family evaluate the
+        corresponding 1-4 segment broken power-law model on raw arrays.  Each
+        segment is continuous: the amplitude at each break is inherited by the
+        next segment so the curve has no discontinuities.
+
+        Args:
+            x: 1-D x-grid array.
+            theta: Flat list of parameter values in the order used by the
+                parent ``bpl`` ``params`` dict for the matching ``seg``.
+
+        Returns:
+            1-D array of the same shape as ``x``.
+        """
         x = np.array(x)
         k1, logA = theta
 
@@ -337,7 +444,20 @@ class bpl(Additive):
 
 
 class sbpl(Additive):
+    """Smoothly broken power-laws: power-law segments joined by smooth transitions."""
+
     def __init__(self, seg):
+        """Initialise the smoothly broken power-law for the requested number of segments.
+
+        The smoothness of each break is controlled by a log-omega parameter
+        (``logO1``, ``logO2``, ``logO3``); larger omega gives a sharper transition.
+
+        Args:
+            seg: Number of power-law segments; must be an integer in ``{2, 3, 4}``.
+
+        Raises:
+            ValueError: If ``seg`` is not an integer, or is outside ``{2, 3, 4}``.
+        """
         super().__init__()
 
         if not isinstance(seg, int):
@@ -383,7 +503,17 @@ class sbpl(Additive):
             raise ValueError('unsupported seg value')
 
     def func(self, X):
+        """Return the smoothly broken power-law dispatched to the appropriate helper.
 
+        Args:
+            X: 2-D input array; the x-grid is taken from column 0.
+
+        Returns:
+            1-D array of model values with the same length as ``X``.
+
+        Raises:
+            ValueError: If ``self.seg`` is outside the supported range ``{2, 3, 4}``.
+        """
         x = X[:, 0]
         theta = [par.value for par in self.params.values()]
 
@@ -401,7 +531,15 @@ class sbpl(Additive):
 
     @staticmethod
     def pl(x, theta):
+        r"""Return a single unnormalised power-law :math:`10^{\mathrm{logA}} (x/x_1)^{k_1}`.
 
+        Args:
+            x: 1-D x-grid array.
+            theta: List ``[k1, x1, logA]`` -- index, pivot, log-amplitude.
+
+        Returns:
+            1-D array of the same shape as ``x``.
+        """
         k1, x1, logA = theta
         Ampl = 10**logA
 
@@ -409,6 +547,22 @@ class sbpl(Additive):
 
     @staticmethod
     def sb2pl(x, theta):
+        r"""Return the 2-segment smoothly broken power-law.
+
+        The ``sb2pl``, ``sb3pl``, and ``sb4pl`` family build up the
+        multi-segment smoothly broken power-law recursively. Each break is
+        smoothed via the joining formula
+        :math:`(F_1^{-\omega} + F_2^{-\omega})^{-1/\omega}`, where
+        :math:`\omega = 10^{\mathrm{logO}}` controls sharpness.
+
+        Args:
+            x: 1-D x-grid array.
+            theta: Flat list of parameter values in the order used by the
+                parent ``sbpl`` ``params`` dict for ``seg == 2``.
+
+        Returns:
+            1-D array of the same shape as ``x``.
+        """
 
         k1, k2, x1, logO1, logA = theta
         omega1 = 10**logO1
@@ -447,7 +601,10 @@ class sbpl(Additive):
 
 
 class spindown(Additive):
+    """Magnetar spin-down luminosity model solved via an ODE for the spin frequency."""
+
     def __init__(self):
+        """Initialise spin-down model with log-B, log-P0, and log-efficiency parameters."""
         super().__init__()
 
         self.expr = 'spindown'
@@ -459,10 +616,38 @@ class spindown(Additive):
         self.params['log$\\eta_{-3}$'] = Par(0, unif(-1, 1))
 
     def ode(self, t, y, a, b):
+        r"""Return the spin-down ODE right-hand side :math:`a \Omega^3 + b \Omega^5`.
+
+        Encodes magnetic dipole (``a``) and gravitational-wave (``b``) braking
+        for the dimensionless spin-frequency ``y``.
+
+        Args:
+            t: Current time (dimensionless, scaled by ``T``).
+            y: Current state vector ``[Omega_hat]`` (dimensionless spin frequency).
+            a: Magnetic-dipole braking coefficient (dimensionless, pre-scaled).
+            b: Gravitational-wave braking coefficient (dimensionless, pre-scaled).
+
+        Returns:
+            Array with one element: the time derivative of ``y``.
+        """
         return a * y**3 + b * y**5
 
     def func(self, X):
+        """Return the magnetar spin-down luminosity at each time in ``X[:, 0]``.
 
+        Integrates the spin-frequency ODE numerically with :func:`scipy.integrate.solve_ivp`
+        using the physical magnetar constants stored as local variables, then
+        converts the resulting spin frequency to radiated power.
+
+        Args:
+            X: 2-D input array; the time grid (in seconds) is taken from column 0.
+
+        Returns:
+            1-D array of luminosity values (in erg/s) with the same length as ``X``.
+
+        Raises:
+            RuntimeError: If the ODE solver fails to converge.
+        """
         t = X[:, 0]
 
         Bp = 10 ** self.params['log$B_{p,15}$'].value * 1e15
@@ -502,7 +687,19 @@ class spindown(Additive):
 
 
 class psd(Additive):
+    """Power spectral density model: white noise plus up to two Lorentzian components."""
+
     def __init__(self, expr):
+        """Initialise the PSD model for the requested variant.
+
+        Args:
+            expr: Model variant string; one of ``'white'``, ``'psd1'``, or
+                ``'psd2'``. ``'white'`` is flat noise only; ``'psd1'`` adds
+                one Lorentzian peak; ``'psd2'`` adds two Lorentzian peaks.
+
+        Raises:
+            ValueError: If ``expr`` is not one of the supported variant strings.
+        """
         super().__init__()
 
         self.expr = expr
@@ -532,7 +729,17 @@ class psd(Additive):
             raise ValueError('unsupported expr value')
 
     def func(self, X):
+        """Return the PSD model value at each frequency in ``X[:, 0]``.
 
+        Args:
+            X: 2-D input array; the frequency grid is taken from column 0.
+
+        Returns:
+            1-D array of PSD values with the same length as ``X``.
+
+        Raises:
+            ValueError: If ``self.expr`` is not a supported variant string.
+        """
         nu = X[:, 0]
 
         theta = [par.value for par in self.params.values()]
@@ -551,7 +758,20 @@ class psd(Additive):
 
     @staticmethod
     def white(nu, cube):
+        """Return a flat (white) noise spectrum with constant power ``Aw``.
 
+        The ``white``, ``psd1``, and ``psd2`` family evaluate the corresponding
+        PSD variant on raw frequency arrays. ``psd1`` adds one Lorentzian peak
+        and ``psd2`` adds two independent Lorentzian peaks to the white floor.
+
+        Args:
+            nu: 1-D frequency-grid array.
+            cube: List of parameter values in the order used by the parent
+                ``psd`` ``params`` dict for the matching ``expr`` variant.
+
+        Returns:
+            1-D array of PSD values with the same shape as ``nu``.
+        """
         Aw = cube[0]
         Pnu = np.ones_like(nu) * Aw
 
