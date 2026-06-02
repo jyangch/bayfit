@@ -1,4 +1,8 @@
-from itertools import pairwise
+"""Plotly-based corner-plot renderer for posterior samples."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
 import logging
 
 import numpy as np
@@ -8,30 +12,47 @@ from scipy.ndimage import gaussian_filter
 
 
 def corner_plotly(
-    xs,
-    bins=30,
-    ranges=None,
-    weights=None,
-    color=None,
-    smooth1d=1,
-    smooth=1,
-    labels=None,
-    quantiles=None,
-    levels=None,
-    values=None,
-    errors=None,
-):
+    xs: np.ndarray | Sequence,
+    bins: int = 30,
+    ranges: list[tuple[float, float]] | None = None,
+    weights: np.ndarray | None = None,
+    color: str | None = None,
+    smooth1d: float | None = 1.0,
+    smooth: float | None = 1.0,
+    labels: list[str] | None = None,
+    quantiles: list[float] | None = None,
+    levels: list[float] | None = None,
+) -> go.Figure:
+    """Render a Plotly corner plot of 1D marginals and 2D contours.
+
+    Draws smoothed 1D histograms on the diagonal and 2D contour plots on
+    the lower triangle, with optional quantile markers.
+
+    Args:
+        xs: 1D or 2D array of samples; a 2D array is treated as rows of
+            observations.
+        bins: Number of bins used for both 1D and 2D histograms.
+        ranges: Per-parameter plotting range. Defaults to full data range.
+        weights: Sample weights.
+        color: Line color for 1D histograms; defaults to a dark blue.
+        smooth1d: Gaussian smoothing sigma for 1D histograms.
+        smooth: Gaussian smoothing sigma for 2D histograms.
+        labels: Axis labels, one per parameter.
+        quantiles: Quantiles to mark on the 1D histograms.
+        levels: Contour levels as enclosed probability mass. Defaults to
+            the one- and two-sigma enclosed masses.
+
+    Returns:
+        The assembled ``plotly.graph_objects.Figure``.
+    """
 
     xs = _parse_input(xs)
-    K = len(xs)
+    K = xs.shape[0]
 
-    bins = [int(bins) for _ in range(K)]
+    bins_list = [int(bins)] * K
 
     if ranges is None:
-        ranges = [[x.min(), x.max()] for x in xs]
-
-    if color is None:
-        color = '#205295'
+        ranges = [(np.min(x), np.max(x)) for x in xs]
 
     if levels is None:
         levels = 1.0 - np.exp(-0.5 * np.array([1, 2]) ** 2)
@@ -39,14 +60,11 @@ def corner_plotly(
     if quantiles is None:
         quantiles = []
 
-    if values is None:
-        values = []
-
-    if errors is None:
-        errors = []
-
     if labels is None:
         labels = [f'label{i}' for i in range(K)]
+
+    if color is None:
+        color = '#08519c'
 
     fig = make_subplots(
         rows=K,
@@ -58,17 +76,18 @@ def corner_plotly(
     )
 
     for i, x in enumerate(xs):
-        n_bins_1d = bins[i]
-        bins_1d = np.linspace(min(ranges[i]), max(ranges[i]), n_bins_1d + 1)
+        n_bins_1d = bins_list[i]
+        bins_1d = np.linspace(ranges[i][0], ranges[i][1], n_bins_1d + 1)
 
         n, _ = np.histogram(x, bins=bins_1d, weights=weights, density=True)
 
         if smooth1d is not None:
             n = gaussian_filter(n, smooth1d)
 
-        x0 = np.array(list(pairwise(bins_1d))).flatten()
-        y0 = np.array(list(zip(n, n, strict=False))).flatten()
+        x0 = np.repeat(bins_1d, 2)[1:-1]
+        y0 = np.repeat(n, 2)
 
+        # Plot 1D histogram on the diagonal
         fig.add_trace(
             go.Scatter(
                 x=x0,
@@ -82,10 +101,12 @@ def corner_plotly(
             col=i + 1,
         )
 
-        if len(quantiles) > 0:
+        # Plot quantiles on the 1D histogram
+        if quantiles:
             qvalues = quantile(x, quantiles, weights=weights)
             for q in qvalues:
-                yq = y0[np.argmin(np.abs(q - x0))]
+                idx = np.argmin(np.abs(q - x0))
+                yq = y0[idx]
                 fig.add_shape(
                     go.layout.Shape(
                         type='line',
@@ -101,60 +122,32 @@ def corner_plotly(
                     col=i + 1,
                 )
 
-        fig.add_trace(
-            go.Scatter(
-                x=[values[i]],
-                y=[0.01],
-                mode='markers',
-                name=f'{labels[i]}',
-                showlegend=False,
-                error_x=dict(
-                    type='data',
-                    symmetric=False,
-                    array=[errors[i][1]],
-                    arrayminus=[errors[i][0]],
-                    color='#FF0092',
-                    thickness=2,
-                    width=0,
-                ),
-                marker=dict(symbol='circle', size=5, color='#FF0092'),
-            ),
-            row=i + 1,
-            col=i + 1,
-        )
-
-        for j, y in enumerate(xs):
-            if j >= i:
-                continue
-
+        # Plot 2D histograms on the off-diagonals (lower triangle)
+        for j, y in enumerate(xs[:i]):
             fig = plot_hist2d(
                 y,
                 x,
-                [bins[j], bins[i]],
-                [ranges[j], ranges[i]],
-                weights,
-                smooth,
-                [labels[j], labels[i]],
-                levels,
-                [values[j], values[i]],
-                [errors[j], errors[i]],
-                fig,
-                (i, j),
+                bins=[bins_list[j], bins_list[i]],
+                ranges=[ranges[j], ranges[i]],
+                weights=weights,
+                smooth=smooth,
+                labels=[labels[j], labels[i]],
+                levels=levels,
+                fig=fig,
+                subfig_idx=(i, j),
             )
 
     fig.update_layout(template='plotly_white', height=200 * K, width=200 * K)
 
-    for i in range(K):
-        for j in range(K):
-            if j > i:
-                continue
-            else:
-                fig.update_xaxes(tickangle=-45, row=i + 1, col=j + 1, showticklabels=False)
-                fig.update_yaxes(tickangle=-45, row=i + 1, col=j + 1, showticklabels=False)
+    # Hide all tick labels by default, set angle
+    fig.update_xaxes(tickangle=-45, showticklabels=False)
+    fig.update_yaxes(tickangle=-45, showticklabels=False)
 
+    # Enable X tick labels for the bottom row, and set titles
     for i in range(K):
         fig.update_xaxes(title_text=labels[i], row=K, col=i + 1, showticklabels=True)
 
+    # Enable Y tick labels for the leftmost column (skipping the top-left diagonal plot), and set titles
     for i in range(1, K):
         fig.update_yaxes(title_text=labels[i], row=i + 1, col=1, showticklabels=True)
 
@@ -162,55 +155,76 @@ def corner_plotly(
 
 
 def plot_hist2d(
-    x, y, bins, ranges, weights, smooth, labels, levels, values, errors, fig, subfig_idx
-):
+    x: np.ndarray,
+    y: np.ndarray,
+    bins: list[int],
+    ranges: list[tuple[float, float]],
+    weights: np.ndarray | None,
+    smooth: float | None,
+    labels: list[str],
+    levels: np.ndarray,
+    fig: go.Figure,
+    subfig_idx: tuple[int, int],
+) -> go.Figure:
+    """Add a smoothed 2D histogram with contour levels to ``fig``.
+
+    Contour levels are chosen so that each encloses a requested cumulative
+    probability mass of the 2D histogram.
+
+    Args:
+        x: Horizontal samples.
+        y: Vertical samples.
+        bins: Bin counts ``[nx, ny]``.
+        ranges: Axis ranges ``[(xmin, xmax), (ymin, ymax)]``.
+        weights: Sample weights.
+        smooth: Gaussian smoothing sigma for the 2D histogram.
+        labels: ``[xlabel, ylabel]`` used to tag the trace.
+        levels: Enclosed probability masses for contour generation.
+        fig: Figure to add the contour trace to.
+        subfig_idx: ``(row, col)`` zero-based index of the target subplot.
+
+    Returns:
+        The modified figure.
+    """
 
     i2, j2 = subfig_idx
 
-    bins_2d = []
-    bins_2d.append(np.linspace(min(ranges[0]), max(ranges[0]), bins[0] + 1))
-    bins_2d.append(np.linspace(min(ranges[1]), max(ranges[1]), bins[1] + 1))
+    bins_x = np.linspace(ranges[0][0], ranges[0][1], bins[0] + 1)
+    bins_y = np.linspace(ranges[1][0], ranges[1][1], bins[1] + 1)
 
-    H, X, Y = np.histogram2d(x.flatten(), y.flatten(), bins=bins_2d, weights=weights)
+    H, X, Y = np.histogram2d(x.flatten(), y.flatten(), bins=[bins_x, bins_y], weights=weights)
 
     if smooth is not None:
         H = gaussian_filter(H, smooth)
 
-    Hflat = H.flatten()
-    inds = np.argsort(Hflat)[::-1]
-    Hflat = Hflat[inds]
-
+    # Calculate contour levels using vectorized searchsorted
+    Hflat = np.sort(H.flatten())[::-1]
     sm = np.cumsum(Hflat)
     sm /= sm[-1]
 
-    V = np.empty(len(levels))
-    for i, v0 in enumerate(levels):
-        try:
-            V[i] = Hflat[sm <= v0][-1]
-        except IndexError:
-            V[i] = Hflat[0]
+    # Find indices where the CDF crosses the requested levels
+    idx = np.searchsorted(sm, levels, side='right') - 1
+    idx = np.clip(idx, 0, len(Hflat) - 1)
+    V = Hflat[idx]
     V.sort()
+
+    # Handle edge case where contours might be identical
     m = np.diff(V) == 0
     if np.any(m):
-        logging.warning('Too few points to create valid contours')
-    while np.any(m):
-        V[np.where(m)[0][0]] *= 1.0 - 1e-4
-        m = np.diff(V) == 0
+        logging.warning('Too few points to create valid contours.')
+        while np.any(m):
+            V[np.where(m)[0][0]] *= 1.0 - 1e-4
+            m = np.diff(V) == 0
     V.sort()
 
-    X1, Y1 = 0.5 * (X[1:] + X[:-1]), 0.5 * (Y[1:] + Y[:-1])
+    X1 = 0.5 * (X[1:] + X[:-1])
+    Y1 = 0.5 * (Y[1:] + Y[:-1])
 
-    H2 = H.min() + np.zeros((H.shape[0] + 4, H.shape[1] + 4))
-    H2[2:-2, 2:-2] = H
-    H2[2:-2, 1] = H[:, 0]
-    H2[2:-2, -2] = H[:, -1]
-    H2[1, 2:-2] = H[0]
-    H2[-2, 2:-2] = H[-1]
-    H2[1, 1] = H[0, 0]
-    H2[1, -2] = H[0, -1]
-    H2[-2, 1] = H[-1, 0]
-    H2[-2, -2] = H[-1, -1]
+    # Pad H using numpy's native padding
+    H_edge = np.pad(H, pad_width=1, mode='edge')
+    H2 = np.pad(H_edge, pad_width=1, mode='constant', constant_values=H.min())
 
+    # Extrapolate coordinates for the padded array
     X2 = np.concatenate(
         [
             X1[0] + np.array([-2, -1]) * np.diff(X1[:2]),
@@ -234,11 +248,7 @@ def plot_hist2d(
             y=Y2,
             name=f'{labels[0]}&{labels[1]}',
             showlegend=False,
-            contours=dict(
-                start=min(V),
-                end=max(V),
-                size=max(V) - min(V),
-            ),
+            contours=dict(start=min(V), end=max(V), size=max(V) - min(V) if max(V) > min(V) else 1),
             ncontours=len(V),
             colorscale='Blues',
             line=dict(width=2),
@@ -248,67 +258,59 @@ def plot_hist2d(
         col=j2 + 1,
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=[values[0]],
-            y=[values[1]],
-            mode='markers',
-            name=f'{labels[0]}&{labels[1]}',
-            showlegend=False,
-            error_x=dict(
-                type='data',
-                symmetric=False,
-                array=[errors[0][1]],
-                arrayminus=[errors[0][0]],
-                color='#FF0092',
-                thickness=2,
-                width=0,
-            ),
-            error_y=dict(
-                type='data',
-                symmetric=False,
-                array=[errors[1][1]],
-                arrayminus=[errors[1][0]],
-                color='#FF0092',
-                thickness=2,
-                width=0,
-            ),
-            marker=dict(symbol='circle', size=5, color='#FF0092'),
-        ),
-        row=i2 + 1,
-        col=j2 + 1,
-    )
-
     return fig
 
 
-def quantile(x, q, weights=None):
+def quantile(
+    x: np.ndarray, q: float | list[float], weights: np.ndarray | None = None
+) -> list[float]:
+    """Return (optionally weighted) quantiles of ``x``.
+
+    Falls back to ``numpy.percentile`` when ``weights`` is ``None``.
+
+    Args:
+        x: 1D sample array.
+        q: Quantile or list of quantiles, each in ``[0, 1]``.
+        weights: Optional sample weights.
+
+    Returns:
+        The requested quantile values as a list.
+
+    Raises:
+        ValueError: If any ``q`` is outside ``[0, 1]``, or if ``weights``
+            has a different length than ``x``.
+    """
 
     x = np.atleast_1d(x)
     q = np.atleast_1d(q)
 
     if np.any(q < 0.0) or np.any(q > 1.0):
-        raise ValueError('Quantiles must be between 0 and 1')
+        raise ValueError('Quantiles must be strictly between 0 and 1.')
 
     if weights is None:
-        return np.percentile(x, list(100.0 * q))
-    else:
-        weights = np.atleast_1d(weights)
-        if len(x) != len(weights):
-            raise ValueError('Dimension mismatch: len(weights) != len(x)')
-        idx = np.argsort(x)
-        sw = weights[idx]
-        cdf = np.cumsum(sw)[:-1]
-        cdf /= cdf[-1]
-        cdf = np.append(0, cdf)
-        return np.interp(q, cdf, x[idx]).tolist()
+        return np.percentile(x, 100.0 * q).tolist()
+
+    weights = np.atleast_1d(weights)
+    if len(x) != len(weights):
+        raise ValueError('Dimension mismatch: len(weights) must equal len(x).')
+
+    idx = np.argsort(x)
+    sw = weights[idx]
+    cdf = np.cumsum(sw)[:-1]
+    cdf /= cdf[-1]
+    cdf = np.insert(cdf, 0, 0.0)
+
+    return np.interp(q, cdf, x[idx]).tolist()
 
 
-def _parse_input(xs):
+def _parse_input(xs: np.ndarray | Sequence) -> np.ndarray:
+
     xs = np.atleast_1d(xs)
-    if len(xs.shape) == 1:
-        xs = np.atleast_2d(xs)
-    else:
-        assert len(xs.shape) == 2, 'The input sample array must be 1- or 2-D.'
+    if xs.ndim == 1:
+        xs = xs[np.newaxis, :]
+    elif xs.ndim == 2:
         xs = xs.T
+    else:
+        raise ValueError('The input sample array must be 1- or 2-D.')
+
     return xs
