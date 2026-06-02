@@ -309,7 +309,14 @@ class Bootstrap(SampleAnalyzer):
     analyzer_type = 'Bootstrap Results'
 
     def _set_best(self):
-        """Use the first sample row (the stored best fit) as ``best_ci``."""
+        """Use the first sample row (the stored best fit) as ``best_ci``.
+
+        Note:
+            Deliberate departure from bayspec, which records the best fit in
+            ``post.truth`` and derives ``best_ci`` by interval containment.
+            Here the maximum-likelihood point is the best estimate, so it is
+            stored directly as ``best_ci``.
+        """
 
         best = self.sample[0, 0:-1]
 
