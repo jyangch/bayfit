@@ -1,3 +1,13 @@
+"""Inference drivers: base aggregator, Bayesian samplers, and max-likelihood fits.
+
+:class:`Infer` aggregates one or more ``(Data, Model)`` pairs, resolves
+shared parameters through the linking machinery, and exposes the joint
+prior, log-likelihood, and fit-statistic entry points that the samplers
+consume. :class:`BayesInfer` adds driver methods for MultiNest and
+emcee; :class:`MaxLikeFit` adds a scipy minimiser plus covariance-driven
+bootstrap sampling.
+"""
+
 from collections import OrderedDict
 import ctypes
 import json
@@ -15,6 +25,21 @@ from .pair import Pair
 
 
 class Infer:
+    """Aggregate of one or more ``(Data, Model)`` pairs with shared parameters.
+
+    Collects per-pair parameters into a single flat index, identifies
+    which of them are free (after honouring ``Par.link``/``unlink``
+    relations and the frozen flag), and publishes the pooled
+    log-likelihood, log-prior, fit statistic, and residuals.
+
+    Attributes:
+        pairs: The raw list of ``(Data, Model)`` tuples.
+        Data/Model/Pair: Per-pair unpacked containers.
+        loglike_func/logprior_func: Optional user overrides for the
+            corresponding computations; ``None`` means use the built-in
+            implementation.
+    """
+
     def __init__(self, pairs=None):
         """Build an inference from ``(Data, Model)`` pairs.
 
@@ -35,6 +60,11 @@ class Infer:
 
     @pairs.setter
     def pairs(self, new_pairs):
+        """Replace all pairs from a list of tuples, then re-extract.
+
+        Raises:
+            ValueError: If ``new_pairs`` is not ``None`` or a list.
+        """
 
         self._pairs = list()
 
@@ -52,6 +82,16 @@ class Infer:
             raise ValueError('unsupported pair type')
 
     def _addpair(self, *pair):
+        """Validate and append one ``(Data, Model)`` pair to ``_pairs``.
+
+        Args:
+            *pair: Two positional arguments, one ``Data`` and one ``Model``
+                in either order.
+
+        Raises:
+            ValueError: If neither element is a ``Data``/``Model`` instance,
+                or if the two elements are the same type.
+        """
 
         p1, p2 = pair
 
@@ -75,11 +115,18 @@ class Infer:
         self._pairs.append((data, model))
 
     def append(self, *pair):
+        """Append a ``(Data, Model)`` or ``(Model, Data)`` pair and re-extract.
+
+        Args:
+            *pair: Two positional arguments, one ``Data`` and one ``Model``
+                in either order.
+        """
 
         self._addpair(*pair)
         self._extract()
 
     def _extract(self):
+        """Unpack ``pairs`` into ``Data``/``Model``/``Pair`` lists and rebuild caches."""
 
         if self.pairs is None:
             raise ValueError('pairs is None')
@@ -95,16 +142,19 @@ class Infer:
 
     @property
     def pdicts(self):
+        """Mapping from every model/data expression to its ``pdicts`` dictionary."""
 
         return OrderedDict([(md.expr, md.pdicts) for md in (self.Model + self.Data)])
 
     @property
     def cdicts(self):
+        """Mapping from every model expression to its ``cdicts`` dictionary."""
 
         return OrderedDict([(mo.expr, mo.pdicts) for mo in self.Model])
 
     @property
     def cfg(self):
+        """Flat :class:`SuperDict` of every model configuration parameter."""
 
         cid = 0
         cfg = SuperDict()
@@ -119,6 +169,7 @@ class Infer:
 
     @property
     def par(self):
+        """Flat :class:`SuperDict` of every model+data parameter (free or frozen)."""
 
         pid = 0
         par = SuperDict()
@@ -133,11 +184,17 @@ class Infer:
 
     @staticmethod
     def foo(id):
+        """Recover the Python object at address ``id`` via ``ctypes`` reflection."""
 
         return ctypes.cast(id, ctypes.py_object).value
 
     @property
     def idpid(self):
+        """Map each ``id(Par)`` to the set of ``par#`` indices it occupies.
+
+        Used to detect which parameter slots share the same underlying
+        ``Par`` instance (linked parameters).
+        """
 
         pid = 0
         idpid = SuperDict()
@@ -155,6 +212,7 @@ class Infer:
 
     @property
     def all_config(self):
+        """List of per-config rows tagged with expression, component, and value."""
 
         cid = 0
         all_config = list()
@@ -178,6 +236,7 @@ class Infer:
 
     @property
     def all_params(self):
+        """List of per-parameter rows, with linked-parameter mates resolved."""
 
         pid = 0
         all_params = list()
@@ -209,6 +268,12 @@ class Infer:
         return all_params
 
     def _you_free(self):
+        """Rebuild the ``free_*`` caches by walking ``all_params`` once.
+
+        A parameter is free if it is not frozen and no earlier slot that
+        shares its underlying ``Par`` instance has already claimed the
+        free-parameter slot.
+        """
 
         unfree_par = set()
         self._free_par = SuperDict()
@@ -234,6 +299,11 @@ class Infer:
         self._free_nparams = len(self._free_plabels)
 
     def link(self, pids):
+        """Link every ``Par`` in ``pids`` so they share value, prior, and posterior.
+
+        Args:
+            pids: Iterable of ``par#`` indices (as strings or ints).
+        """
 
         for i, ip in enumerate(pids):
             for j, jp in enumerate(pids):
@@ -243,6 +313,11 @@ class Infer:
         self._you_free()
 
     def unlink(self, pids):
+        """Undo any linking between every pair drawn from ``pids``.
+
+        Args:
+            pids: Iterable of ``par#`` indices.
+        """
 
         for i, ip in enumerate(pids):
             for j, jp in enumerate(pids):
@@ -253,6 +328,18 @@ class Infer:
 
     @property
     def free_par(self):
+        """:class:`SuperDict` of the free ``Par`` instances keyed by ``par#``.
+
+        Every ``free_*`` property on this class is derived from the same
+        :meth:`_you_free` pass. The family covers:
+
+        - ``free_par`` -- :class:`SuperDict` keyed by ``par#``.
+        - ``free_params`` -- rows from :attr:`all_params` restricted to free slots.
+        - ``free_plabels`` -- LaTeX-decorated labels, in canonical order.
+        - ``free_pvalues`` -- current numeric values of each free parameter.
+        - ``free_pranges`` -- ``(low, high)`` bounds used by minimisers.
+        - ``free_nparams`` -- integer count of free parameters.
+        """
 
         return self._free_par
 
@@ -301,6 +388,14 @@ class Infer:
 
     @property
     def data_x(self):
+        """Concatenated x arrays from every data unit across all pairs.
+
+        Every ``data_*`` property on this class flattens the same-named
+        attribute from each ``DataUnit`` over every pair, so downstream
+        code can treat the whole inference as a single series. The family
+        covers ``data_x``, ``data_y``, ``data_xerr``, ``data_yerr``, and
+        ``data_up``.
+        """
 
         return [unit.x for pair in self.Pair for unit in pair.data.data.values()]
 
@@ -326,6 +421,7 @@ class Infer:
 
     @property
     def model_y(self):
+        """Concatenated model-predicted y values evaluated at the current parameters."""
 
         ys = list()
         for pair in self.Pair:
@@ -349,56 +445,67 @@ class Infer:
 
     @property
     def stat_list(self):
+        """Concatenated per-unit fit statistic across every pair."""
 
         return np.hstack([pair.stat_list for pair in self.Pair])
 
     @property
     def weight_list(self):
+        """Concatenated per-unit weights across every pair."""
 
         return np.hstack([pair.weight_list for pair in self.Pair])
 
     @property
     def stat(self):
+        """Summed fit statistic across every pair."""
 
         return np.sum(self.stat_list * self.weight_list)
 
     @property
     def loglike_list(self):
+        """Concatenated per-unit log-likelihood across every pair."""
 
         return -0.5 * self.stat_list
 
     @property
     def loglike(self):
+        """Summed log-likelihood across every pair."""
 
         return -0.5 * self.stat
 
     @property
     def npoint_list(self):
+        """Concatenated per-unit data-point counts across every pair."""
 
         return np.hstack([pair.npoint_list for pair in self.Pair])
 
     @property
     def npoint(self):
+        """Total number of fitted data points across every pair."""
 
         return np.sum(self.npoint_list)
 
     @property
     def dof(self):
+        """Degrees of freedom: :attr:`npoint` minus the free-parameter count."""
 
         return self.npoint - self.free_nparams
 
     @property
     def prior_list(self):
+        """Per-parameter prior densities evaluated at the current free values."""
 
         return [par.prior.pdf(par.val) for par in self.free_par.values()]
 
     @property
     def logprior(self):
+        """Joint log-prior as the log of the product of :attr:`prior_list`."""
 
         return np.log(np.prod(self.prior_list))
 
     @property
     def all_stat(self):
+        """Per-pair statistic summary plus a totals row, ready for ``Info.from_dict``."""
 
         all_stat = OrderedDict(
             [
@@ -424,11 +531,13 @@ class Infer:
 
     @property
     def cfg_info(self):
+        """Tabular :class:`Info` view of every configuration parameter."""
 
         return Info.from_list_dict(self.all_config)
 
     @property
     def par_info(self):
+        """Tabular parameter view tagging free slots with ``*`` and resolving linked aliases."""
 
         self._you_free()
 
@@ -453,6 +562,7 @@ class Infer:
 
     @property
     def free_par_info(self):
+        """Tabular :class:`Info` view restricted to the free parameters."""
 
         self._you_free()
 
@@ -466,10 +576,12 @@ class Infer:
 
     @property
     def stat_info(self):
+        """Tabular :class:`Info` view of :attr:`all_stat`."""
 
         return Info.from_dict(self.all_stat)
 
     def at_par(self, theta):
+        """Write free-parameter values from the 1-indexed sequence ``theta``."""
 
         theta = np.array(theta, dtype=float)
 
@@ -477,6 +589,7 @@ class Infer:
             self.free_par[i + 1].val = thi
 
     def _loglike(self, theta):
+        """Apply ``theta`` and return the raw summed log-likelihood."""
 
         self.at_par(theta)
 
@@ -507,6 +620,7 @@ class Infer:
         return self.pseudo_residual
 
     def _prior_transform(self, cube):
+        """Transform a unit-cube sample to parameter space via each prior's inverse CDF."""
 
         theta = np.array(cube)
 
@@ -516,6 +630,7 @@ class Infer:
         return theta
 
     def _logprior(self, theta):
+        """Return the joint log-prior at ``theta``; ``-inf`` outside the prior support."""
 
         pprs = np.zeros_like(theta)
 
@@ -530,6 +645,7 @@ class Infer:
             return np.log(ppr)
 
     def _logprior_sample(self, theta_sample):
+        """Vectorized log-prior over a sample matrix; returns ``-inf`` where it vanishes."""
 
         pprs_sample = np.zeros_like(theta_sample)
 
@@ -541,6 +657,7 @@ class Infer:
         return np.where(ppr_sample == 0, -np.inf, np.log(ppr_sample))
 
     def _logprob(self, theta):
+        """Return the unnormalised log-posterior; ``-inf`` outside the prior support."""
 
         return self._logprior(theta) + self._loglike(theta)
 
@@ -552,6 +669,7 @@ class Infer:
         return ''
 
     def multinest_loglike(self, cube, ndim, nparams):
+        """MultiNest C-callback log-likelihood; writes free parameters from ``cube``."""
 
         theta = np.array([cube[i] for i in range(ndim)], dtype=float)
 
@@ -561,11 +679,22 @@ class Infer:
         return np.sum([[pair.loglike for pair in self.Pair]])
 
     def multinest_prior_transform(self, cube, ndim, nparams):
+        """MultiNest C-callback prior transform; writes transformed values into ``cube``."""
 
         for i in range(ndim):
             cube[i] = self.free_par[i + 1].prior.ppf(cube[i])
 
     def multinest(self, nlive=500, resume=True, savepath='./'):
+        """Run MultiNest and return a :class:`~curvefit.infer.posterior.Posterior`.
+
+        Args:
+            nlive: Number of live points.
+            resume: Resume from any chain already present under ``savepath``.
+            savepath: Directory for MultiNest outputs and cached samples.
+
+        Returns:
+            A :class:`~curvefit.infer.posterior.Posterior`.
+        """
 
         import pymultinest
 
@@ -616,6 +745,7 @@ class Infer:
         return Posterior(self)
 
     def emcee_logprob(self, theta):
+        """emcee-facing log-probability; returns ``-inf`` outside the prior support."""
 
         lp = self._logprior(theta)
 
@@ -624,6 +754,17 @@ class Infer:
         return lp + self._loglike(theta)
 
     def emcee(self, nstep=1000, discard=100, resume=True, savepath='./'):
+        """Run emcee and return a :class:`~curvefit.infer.posterior.Posterior`.
+
+        Args:
+            nstep: Number of MCMC steps per walker.
+            discard: Burn-in steps discarded before flattening.
+            resume: Reuse an existing chain cached under ``savepath``.
+            savepath: Directory for chain outputs.
+
+        Returns:
+            A :class:`~curvefit.infer.posterior.Posterior`.
+        """
 
         import emcee
 
@@ -680,8 +821,15 @@ class Infer:
         return Posterior(self)
 
     def minimize(self, method='Nelder-Mead'):
-        """
-        method: 'Nelder-Mead', 'TNC', 'SLSQP', 'Powell', 'trust-constr', 'L-BFGS-B'
+        """Minimise the negative log-likelihood with a scipy optimizer and return best-fit values.
+
+        Args:
+            method: Scipy ``minimize`` method name. Supported options include
+                ``'Nelder-Mead'``, ``'TNC'``, ``'SLSQP'``, ``'Powell'``,
+                ``'trust-constr'``, and ``'L-BFGS-B'``.
+
+        Returns:
+            Array of best-fit free-parameter values.
         """
 
         np.random.seed(42)
@@ -696,6 +844,13 @@ class Infer:
 
 
 class BayesInfer(Infer):
+    """:class:`Infer` alias for Bayesian inference workflows.
+
+    Inherits all MultiNest and emcee driver methods from :class:`Infer`
+    without modification; exists as a distinct class for type-checking
+    and display labelling.
+    """
+
     pass
 
 
