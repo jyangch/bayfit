@@ -1,4 +1,4 @@
 from .pair import Pair
-from .infer import Infer, BayesInfer
+from .infer import Infer, BayesInfer, MaxLikeFit
 from .statistic import Statistic
-from .posterior import Posterior
+from .posterior import SampleAnalyzer, Posterior, Bootstrap

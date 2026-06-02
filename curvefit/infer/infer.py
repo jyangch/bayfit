@@ -2,6 +2,7 @@ from collections import OrderedDict
 import ctypes
 import json
 import os
+import warnings
 
 import numpy as np
 from scipy.optimize import minimize
@@ -696,3 +697,258 @@ class Infer:
 
 class BayesInfer(Infer):
     pass
+
+
+class MaxLikeFit(Infer):
+    """:class:`Infer` extension for maximum-likelihood fits with bootstrap sampling.
+
+    Provides :meth:`lmfit` (least-squares on the pseudo-residuals; only for
+    pure chi-square statistics) and :meth:`iminuit` (scalar minimisation of
+    the fit statistic; valid for every statistic). Both run the minimiser,
+    build a covariance-driven bootstrap sample, and return a
+    :class:`~curvefit.infer.posterior.Bootstrap`.
+    """
+
+    def __init__(self, pairs=None):
+        """Initialise like :class:`Infer` and tag the inference type."""
+
+        super().__init__(pairs=pairs)
+
+        self.inference_type = 'Maximum Likelihood Estimation'
+
+    def _make_bootstrap_sample(
+        self, values, covar=None, errors=None, nsample=1000, random_seed=450001
+    ):
+        """Draw a covariance-respecting bootstrap sample and score each draw.
+
+        Falls back to a diagonal covariance built from ``errors`` when
+        ``covar`` is missing or non-finite. Draws outside any free
+        parameter's range are rejected. The first row is the best fit.
+
+        Args:
+            values: Best-fit free-parameter vector.
+            covar: Optional parameter covariance matrix.
+            errors: Optional per-parameter uncertainties for the fallback.
+            nsample: Target number of valid draws.
+            random_seed: Seed for reproducibility.
+        """
+
+        values = np.asarray(values, dtype=float)
+        ndim = values.size
+
+        nsample = max(int(nsample), 1)
+
+        if covar is not None:
+            covar = np.asarray(covar, dtype=float)
+
+        if covar is None or covar.shape != (ndim, ndim) or (not np.isfinite(covar).all()):
+            msg = (
+                'Covariance matrix is not provided or invalid. '
+                'Using diagonal covariance with variances from errors or zeros.'
+            )
+            warnings.warn(msg, stacklevel=2)
+            err = np.zeros(ndim, dtype=float) if errors is None else np.asarray(errors, dtype=float)
+            err = np.where(np.isfinite(err), np.abs(err), 0.0)
+            covar = np.diag(err * err)
+
+        covar = 0.5 * (covar + covar.T)
+        eigval, eigvec = np.linalg.eigh(covar)
+        scale = np.max(np.abs(eigval)) if eigval.size else 1.0
+        floor = np.finfo(float).eps * (scale if scale > 0 else 1.0)
+        eigval = np.clip(eigval, floor, None)
+        covar = eigvec @ np.diag(eigval) @ eigvec.T
+
+        lower = np.array([pr[0] for pr in self.free_pranges], dtype=float)
+        upper = np.array([pr[1] for pr in self.free_pranges], dtype=float)
+
+        rng = np.random.default_rng(random_seed)
+
+        param_sample = [values.copy()]
+        tries = 0
+        while len(param_sample) < nsample and tries < 10:
+            batch_size = max(4 * (nsample - len(param_sample)), 128)
+            draw = rng.multivariate_normal(values, covar, size=batch_size, check_valid='ignore')
+            draw = np.atleast_2d(draw)
+
+            inside = np.all((draw >= lower) & (draw <= upper), axis=1)
+            param_sample.extend(draw[inside][: nsample - len(param_sample)])
+            tries += 1
+
+        if len(param_sample) < nsample:
+            msg = f'Only {len(param_sample)} valid samples were generated after {tries} attempts.'
+            warnings.warn(msg, stacklevel=2)
+            param_sample = np.asarray(param_sample, dtype=float)
+        else:
+            param_sample = np.asarray(param_sample[:nsample], dtype=float)
+
+        loglike_sample = np.array([self.calc_loglike(theta) for theta in param_sample], dtype=float)
+
+        self.bootstrap_sample = np.hstack((param_sample, loglike_sample[:, None]))
+
+        self.at_par(values)
+
+    @staticmethod
+    def _display_results(*objects):
+        """Render each object with IPython when available, else ``print`` it."""
+
+        valid_objects = [obj for obj in objects if obj is not None]
+
+        try:
+            from IPython.display import display
+        except ImportError:
+            for obj in valid_objects:
+                print(obj)
+            return
+
+        for obj in valid_objects:
+            display(obj)
+
+    def _check_lmfit_safe(self):
+        """Ensure every unit uses an lmfit-safe statistic.
+
+        Raises:
+            ValueError: If any unit's statistic is not in
+                :data:`~curvefit.infer.statistic.LMFIT_SAFE_STATS`; use
+                :meth:`iminuit` for those.
+        """
+
+        from .statistic import LMFIT_SAFE_STATS
+
+        stats = [s for data in self.Data for s in data.stats]
+        bad = sorted({s for s in stats if s not in LMFIT_SAFE_STATS})
+        if bad:
+            msg = (
+                f'lmfit (least-squares) supports only {sorted(LMFIT_SAFE_STATS)}; '
+                f'statistics {bad} fit a free variance -- use iminuit() instead.'
+            )
+            raise ValueError(msg)
+
+    def lmfit_residual(self, params):
+        """lmfit-facing residual callback; delegates to :meth:`calc_pseudo_residual`."""
+
+        theta = [params[pl].value for pl in self.clean_free_plabels]
+
+        return self.calc_pseudo_residual(theta)
+
+    def lmfit(self, savepath=None):
+        """Run ``lmfit.minimize`` on the pseudo-residuals and bootstrap the result.
+
+        Args:
+            savepath: Optional directory for persisted bootstrap samples and
+                summary JSON; ``None`` skips disk IO.
+
+        Returns:
+            A :class:`~curvefit.infer.posterior.Bootstrap`.
+
+        Raises:
+            ValueError: If any unit uses a non-lmfit-safe statistic.
+        """
+
+        import lmfit
+
+        from .posterior import Bootstrap
+
+        self._you_free()
+        self._check_lmfit_safe()
+
+        lmfit_params = lmfit.Parameters()
+
+        for pl, pv, pr in zip(
+            self.clean_free_plabels, self.free_pvalues, self.free_pranges, strict=False
+        ):
+            lmfit_params.add(pl, value=pv, min=pr[0], max=pr[1], vary=True)
+
+        lmfit_result = lmfit.minimize(self.lmfit_residual, lmfit_params)
+
+        self._display_results(lmfit_result)
+
+        values = np.array([lmfit_result.params[pl].value for pl in self.clean_free_plabels])
+        errors = np.array(
+            [
+                np.nan if lmfit_result.params[pl].stderr is None else lmfit_result.params[pl].stderr
+                for pl in self.clean_free_plabels
+            ]
+        )
+        covar = getattr(lmfit_result, 'covar', None)
+
+        self._make_bootstrap_sample(values, covar=covar, errors=errors)
+
+        maxlike_res = {'values': values, 'errors': errors, 'covar': covar}
+
+        if savepath is not None:
+            if not os.path.exists(savepath):
+                os.makedirs(savepath)
+            savepath_prefix = savepath + '/1-'
+
+            np.savetxt(savepath_prefix + 'bootstrap_sample.txt', self.bootstrap_sample)
+            with open(savepath_prefix + 'maxlike_res.json', 'w') as f:
+                json.dump(maxlike_res, f, indent=4, cls=JsonEncoder)
+
+        return Bootstrap(self)
+
+    def iminuit_cost(self, *theta):
+        """iminuit-facing cost; returns ``1e100`` when the statistic is non-finite."""
+
+        cost = self.calc_stat(theta)
+
+        if np.isfinite(cost):
+            return float(cost)
+        else:
+            return 1e100
+
+    def iminuit(self, savepath=None):
+        """Run iminuit's ``migrad`` + ``hesse`` + ``minos`` and bootstrap the result.
+
+        Args:
+            savepath: Optional directory for persisted bootstrap samples and
+                summary JSON.
+
+        Returns:
+            A :class:`~curvefit.infer.posterior.Bootstrap`.
+        """
+
+        import iminuit
+
+        from .posterior import Bootstrap
+
+        self._you_free()
+
+        minuit = iminuit.Minuit(
+            self.iminuit_cost, *self.free_pvalues, name=self.clean_free_indexed_plabels
+        )
+        minuit.errordef = 2 * iminuit.Minuit.LIKELIHOOD
+        minuit.print_level = 0
+
+        for pl, pr in zip(self.clean_free_indexed_plabels, self.free_pranges, strict=False):
+            minuit.limits[pl] = pr
+
+        minuit.migrad()
+        minuit.hesse()
+        minuit.minos()
+
+        self._display_results(minuit)
+
+        values = np.array([par.value for par in minuit.params])
+        errors = np.array([par.error for par in minuit.params])
+        minos_errors = np.array([par.merror for par in minuit.params])
+        covar = None if minuit.covariance is None else np.asarray(minuit.covariance)
+
+        self._make_bootstrap_sample(values, covar=covar, errors=errors)
+
+        maxlike_res = {
+            'values': values,
+            'errors': errors,
+            'minos_errors': minos_errors,
+            'covar': covar,
+        }
+
+        if savepath is not None:
+            if not os.path.exists(savepath):
+                os.makedirs(savepath)
+            savepath_prefix = savepath + '/1-'
+
+            np.savetxt(savepath_prefix + 'bootstrap_sample.txt', self.bootstrap_sample)
+            with open(savepath_prefix + 'maxlike_res.json', 'w') as f:
+                json.dump(maxlike_res, f, indent=4, cls=JsonEncoder)
+
+        return Bootstrap(self)
