@@ -249,6 +249,10 @@ class DataUnit:
             stat: Statistic string used during fitting.  Defaults to
                 ``'chi^2'``.
             name: Optional label for this unit.
+
+        Raises:
+            ValueError: If any error, weight, or upper-limit array length
+                does not match the data, or an error has an unsupported shape.
         """
 
         self.x = np.asarray(x, dtype=float)

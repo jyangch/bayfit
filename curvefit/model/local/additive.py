@@ -628,7 +628,7 @@ class spindown(Additive):
             b: Gravitational-wave braking coefficient (dimensionless, pre-scaled).
 
         Returns:
-            List with one element: the time derivative of ``y``.
+            Array with one element: the time derivative of ``y``.
         """
         return a * y**3 + b * y**5
 

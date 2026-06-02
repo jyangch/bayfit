@@ -390,9 +390,9 @@ class Infer:
     def data_x(self):
         """Concatenated x arrays from every data unit across all pairs.
 
-        Every ``data_*`` property on this class flattens the same-named
-        attribute from each ``DataUnit`` over every pair, so downstream
-        code can treat the whole inference as a single series. The family
+        Every ``data_*`` property on this class collects the same-named
+        attribute from each ``DataUnit`` over every pair into a list, so
+        downstream code can iterate per unit. The family
         covers ``data_x``, ``data_y``, ``data_xerr``, ``data_yerr``, and
         ``data_up``.
         """
@@ -821,7 +821,7 @@ class Infer:
         return Posterior(self)
 
     def minimize(self, method='Nelder-Mead'):
-        """Minimise the negative log-likelihood with a scipy optimizer and return best-fit values.
+        """Minimise ``-2 * log-likelihood`` with a scipy optimizer and return best-fit values.
 
         Args:
             method: Scipy ``minimize`` method name. Supported options include

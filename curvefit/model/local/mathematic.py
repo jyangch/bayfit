@@ -14,7 +14,7 @@ from ..model import Mathematic
 
 
 class const(Mathematic):
-    """Constant model: returns a uniform scalar value ``C`` at every x point."""
+    """Constant model: evaluates to the same value ``C`` at every x point."""
 
     def __init__(self):
         """Initialise the constant with a single free parameter ``C``."""

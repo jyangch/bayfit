@@ -20,6 +20,8 @@ local_models = {
 
 
 def list_local_models():
+    """Return the names of every registered local model class."""
+
     return list(local_models.keys())
 
 
