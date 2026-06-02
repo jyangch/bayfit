@@ -1,3 +1,10 @@
+"""Local model components shipped with curvefit.
+
+Re-exports every additive, multiplicative, and mathematical component
+defined in the submodules and tracks them in ``local_models`` for
+discoverability via ``list_local_models``.
+"""
+
 from .additive import *  # noqa: F403
 from .mathematic import *  # noqa: F403
 from .multiplicative import *  # noqa: F403

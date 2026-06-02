@@ -1,10 +1,39 @@
+"""Matplotlib plotting helpers for models, inference results, and posteriors.
+
+``Plot`` provides static methods that produce ``matplotlib.figure.Figure``
+objects from curvefit model and inference objects.  All renderers use
+matplotlib only -- there is no plotly dependency in this module.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 class Plot:
+    """Static factory for figures over curvefit models and inference results.
+
+    Every method accepts a curvefit object and returns a
+    ``matplotlib.figure.Figure``.  No backend selection is needed; the
+    class always uses matplotlib.
+    """
+
     @staticmethod
     def model(model, x, ax=None):
+        """Plot the model curve over a user-supplied x grid.
+
+        Evaluates ``model.func`` at every point in ``x`` and draws the
+        resulting curve, labelling the line with ``model.expr``.
+
+        Args:
+            model: A curvefit ``Model`` instance whose ``func`` and ``expr``
+                attributes are used.
+            x: 1-D array-like of x values at which the model is evaluated.
+            ax: Optional existing ``matplotlib.axes.Axes`` to draw into.
+                A new figure and axes are created when ``None``.
+
+        Returns:
+            The ``matplotlib.figure.Figure`` containing the model curve.
+        """
 
         x = np.asarray(x, dtype=float)
         y = model.func(x[:, None])
@@ -23,6 +52,32 @@ class Plot:
 
     @staticmethod
     def infer(post, nsample=200, ngrid=200, seed=42):
+        """Plot data with the posterior best-fit curve and 1-sigma band.
+
+        The top panel shows, for each ``Pair`` in the posterior, the observed
+        data points with asymmetric error bars and upper-limit markers
+        (downward-pointing triangles for points where ``unit.up`` is
+        ``True``), the best-fit model curve evaluated at ``par_best_ci``, and
+        a shaded 1-sigma posterior band derived from ``nsample`` random
+        draws from the posterior sample.  The bottom panel shows per-point
+        residuals in units of sigma against a reference line at zero.
+
+        Args:
+            post: A curvefit ``Posterior`` instance that exposes
+                ``Pair``, ``posterior_sample``, ``par_best_ci``,
+                ``free_nparams``, and ``at_par``.
+            nsample: Maximum number of posterior samples drawn to build the
+                credible band.  Fewer samples are used when the chain is
+                shorter than this value.
+            ngrid: Number of evenly spaced points on the x grid used to
+                evaluate the band curves.
+            seed: Integer seed for the random-number generator used to
+                select the sample subset.
+
+        Returns:
+            The ``matplotlib.figure.Figure`` containing the top data/fit
+            panel and the bottom residual panel.
+        """
 
         fig, (ax, axr) = plt.subplots(
             2, 1, sharex=True, figsize=(7, 6), gridspec_kw={'height_ratios': [3, 1]}
@@ -109,6 +164,23 @@ class Plot:
 
     @staticmethod
     def post_corner(post, **kwargs):
+        """Produce a corner plot of the free-parameter posterior samples.
+
+        Draws a triangle (corner) plot of the joint and marginal posterior
+        distributions for all free parameters using the ``corner`` library.
+        Extra keyword arguments are forwarded directly to
+        ``corner.corner``.
+
+        Args:
+            post: A curvefit ``Posterior`` instance that exposes
+                ``posterior_sample`` and ``free_plabels``.
+            **kwargs: Additional keyword arguments passed through to
+                ``corner.corner`` (e.g. ``labels``, ``truths``,
+                ``quantiles``).
+
+        Returns:
+            The ``matplotlib.figure.Figure`` produced by ``corner.corner``.
+        """
 
         import corner
 

@@ -1,3 +1,5 @@
+"""Shared utilities: priors, parameters, info tables, plot helpers, and post."""
+
 from .prior import *  # noqa: F403
 from .info import Info
 from .plot import Plot
