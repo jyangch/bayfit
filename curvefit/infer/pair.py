@@ -60,20 +60,28 @@ class Pair:
 
         return [par.val for par in self.model.par.values()]
 
+    def _kwargs(self, unit):
+
+        return {
+            'mo_func': self.mo_func,
+            'params': self.pvalues,
+            'x': unit.x,
+            'y': unit.y,
+            'x_err': unit.xerr,
+            'y_err': unit.yerr,
+            'w': unit.weight,
+            'up': unit.up,
+        }
+
     def _stat_calculate(self):
 
-        params = self.pvalues
-
-        loglike = list()
-        for unit in self.data.data.values():
-            func = self._allowed_stats[unit.stat]
-            loglike.append(
-                func(
-                    self.mo_func, params, unit.x, unit.y, unit.xerr, unit.yerr, unit.weight, unit.up
-                )
-            )
-
-        return np.array(loglike, dtype=float)
+        return np.array(
+            [
+                -0.5 * self._allowed_stats[u.stat](**self._kwargs(u))[0]
+                for u in self.data.data.values()
+            ],
+            dtype=float,
+        )
 
     @property
     def loglike_list(self):
