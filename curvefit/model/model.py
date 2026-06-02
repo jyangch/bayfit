@@ -1,3 +1,13 @@
+"""Curve-fitting model base classes and the composition algebra.
+
+``Model`` defines the functional contract (``func(X)``), parameter and config
+dictionaries, and posterior-aware evaluators. ``X`` is a 2-D array whose first
+column (``X[:,0]``) carries the independent variable. ``Additive``,
+``Multiplicative``, and ``Mathematic`` are thin subclasses that fix the
+``type`` tag, and ``CompositeModel`` implements the arithmetic algebra
+(``+``, ``-``, ``*``, ``/``) used to build multi-component expressions.
+"""
+
 from collections import OrderedDict
 import os
 import warnings
@@ -11,9 +21,30 @@ from ..util.tools import SuperDict, json_dump
 
 
 class Model:
+    """Base class for a curve-fitting model component.
+
+    Subclasses override :meth:`func` with the model's analytical form and
+    populate ``config`` (``Cfg`` entries -- frozen values such as fixed
+    offsets) and ``params`` (``Par`` entries -- fittable quantities). The
+    ``type`` tag -- ``'add'``, ``'mul'``, or ``'math'`` -- drives
+    type-checking when models are composed with the arithmetic operators.
+
+    Attributes:
+        expr: Short expression label used in tables and composite names.
+        type: One of ``'add'``, ``'mul'``, ``'math'``.
+        comment: Free-form description of the component.
+        config: ``OrderedDict`` of configuration ``Cfg`` entries.
+        params: ``OrderedDict`` of fit ``Par`` entries.
+    """
+
     _allowed_types = ('add', 'mul', 'math')
 
     def __init__(self):
+        """Initialise the default dummy component.
+
+        Real subclasses override this to set ``expr``/``type``/``comment``
+        and populate ``config``/``params`` with their own entries.
+        """
 
         self.expr = 'model'
         self.type = 'add'
@@ -26,30 +57,48 @@ class Model:
         self.params['par'] = Par(1, unif(0, 2))
 
     def func(self, X):
+        """Evaluate the model at the input array ``X``.
+
+        ``X`` is a 2-D array where ``X[:,0]`` holds the independent variable
+        (e.g., the x-axis grid). Additive models return a y-value array;
+        multiplicative and mathematical models return a dimensionless factor.
+
+        Args:
+            X: 2-D input array; ``X[:,0]`` is the x-coordinate grid.
+
+        Returns:
+            The model value at the given sampling; subclass-specific.
+        """
+
         pass
 
     @property
     def mdicts(self):
+        """Mapping from ``expr`` to component model; overridden by composites."""
 
         return OrderedDict([(self.expr, self)])
 
     @property
     def fdicts(self):
+        """Mapping from ``expr`` to each component's ``func`` callable."""
 
         return OrderedDict([(ex, mo.func) for ex, mo in self.mdicts.items()])
 
     @property
     def cdicts(self):
+        """Mapping from ``expr`` to each component's ``config`` dict."""
 
         return OrderedDict([(ex, mo.config) for ex, mo in self.mdicts.items()])
 
     @property
     def pdicts(self):
+        """Mapping from ``expr`` to each component's ``params`` dict."""
 
         return OrderedDict([(ex, mo.params) for ex, mo in self.mdicts.items()])
 
     @property
     def cfg(self):
+        """Flat :class:`SuperDict` of every config parameter across components."""
 
         cid = 0
         cfg = SuperDict()
@@ -63,6 +112,7 @@ class Model:
 
     @property
     def par(self):
+        """Flat :class:`SuperDict` of every fit parameter across components."""
 
         pid = 0
         par = SuperDict()
@@ -76,11 +126,13 @@ class Model:
 
     @property
     def pvalues(self):
+        """Tuple of current parameter values, preserving ``par`` order."""
 
         return tuple([pr.value for pr in self.par.values()])
 
     @property
     def all_config(self):
+        """List of per-config rows with component, label, and value."""
 
         cid = 0
         all_config = list()
@@ -97,6 +149,7 @@ class Model:
 
     @property
     def all_params(self):
+        """List of per-parameter rows with value, prior, posterior, and frozen flag."""
 
         pid = 0
         all_params = list()
@@ -121,6 +174,7 @@ class Model:
 
     @property
     def cfg_info(self):
+        """Tabular :class:`Info` view of every configuration parameter."""
 
         all_config = self.all_config.copy()
 
@@ -128,6 +182,7 @@ class Model:
 
     @property
     def par_info(self):
+        """Tabular :class:`Info` view of parameters with frozen ones tagged."""
 
         all_params = self.all_params.copy()
 
@@ -143,6 +198,11 @@ class Model:
         return Info.from_dict(all_params)
 
     def save(self, savepath):
+        """Dump the config and parameter tables under ``savepath``.
+
+        Args:
+            savepath: Directory path. Created if missing.
+        """
 
         if not os.path.exists(savepath):
             os.makedirs(savepath)
@@ -152,6 +212,11 @@ class Model:
 
     @property
     def fit_to(self):
+        """Return the ``Data`` this model is bound to, or raise if unset.
+
+        Raises:
+            AttributeError: If no data has been assigned.
+        """
 
         try:
             return self._fit_to
@@ -160,6 +225,11 @@ class Model:
 
     @fit_to.setter
     def fit_to(self, new_data):
+        """Bind a ``Data`` to this model and keep the back-reference in sync.
+
+        Raises:
+            ValueError: If ``new_data`` is not a ``Data``.
+        """
 
         from ..data.data import Data
 
@@ -177,6 +247,7 @@ class Model:
                 self._fit_to.fit_with = self
 
     def at_par(self, theta):
+        """Write every free parameter value from the 1-indexed sequence ``theta``."""
 
         for i, thi in enumerate(theta):
             self.par[i + 1].val = thi
@@ -212,6 +283,12 @@ class Model:
         return [par.val if par.frozen else par.post.truth for par in self.par.values()]
 
     def mean_func(self, X):
+        """Evaluate ``func`` at the posterior mean parameter vector.
+
+        The family ``{mean,median,best,best_ci,truth}_func`` all follow the
+        same pattern: set ``par`` from the named posterior summary, then
+        call :meth:`func` with the supplied ``X``.
+        """
 
         self.at_par(self.par_mean)
 
@@ -243,6 +320,7 @@ class Model:
 
     @property
     def posterior_nsample(self):
+        """Number of posterior draws; equals ``1`` when every parameter is frozen."""
 
         nsample = max([1 if par.frozen else par.post.nsample for par in self.par.values()])
 
@@ -250,6 +328,11 @@ class Model:
 
     @property
     def posterior_sample(self):
+        """``(nsample, npar)`` matrix of posterior draws.
+
+        Frozen parameters are filled with their fixed value so the matrix
+        is rectangular.
+        """
 
         sample = np.vstack(
             [
@@ -261,6 +344,15 @@ class Model:
         return sample
 
     def sample_statistic(self, sample):
+        """Summarize a draw matrix with mean, median, and 1/2/3-sigma intervals.
+
+        Args:
+            sample: ``(nsample, ...)`` array of draws.
+
+        Returns:
+            Dict with keys ``mean``, ``median``, ``Isigma``, ``IIsigma``,
+            ``IIIsigma``, and ``90%``.
+        """
 
         mean = np.mean(sample, axis=0)
         median = np.median(sample, axis=0)
@@ -290,10 +382,24 @@ class Model:
 
     @property
     def par_sample(self):
+        """Summary statistics of the posterior parameter matrix."""
 
         return self.sample_statistic(self.posterior_sample)
 
     def func_sample(self, X):
+        """Return posterior summaries of ``func`` evaluated at ``X``.
+
+        Iterates over every posterior draw, calls :meth:`func`, and
+        returns the result of :meth:`sample_statistic` over the collected
+        samples.
+
+        Args:
+            X: Input array passed to :meth:`func`; may be scalar or array.
+
+        Returns:
+            Dict with keys ``mean``, ``median``, ``Isigma``, ``IIsigma``,
+            ``IIIsigma``, and ``90%``.
+        """
 
         scalar = np.asarray(X).ndim == 0
 
@@ -309,34 +415,42 @@ class Model:
         return self.sample_statistic(sample)
 
     def __add__(self, other):
+        """Build a composite that sums this component with ``other``."""
 
         return CompositeModel(self, '+', other)
 
     def __radd__(self, other):
+        """Right-side variant of :meth:`__add__`."""
 
         return self.__add__(other)
 
     def __sub__(self, other):
+        """Build a composite that subtracts ``other`` from this component."""
 
         return CompositeModel(self, '-', other)
 
     def __rsub__(self, other):
+        """Right-side variant of :meth:`__sub__`."""
 
         return CompositeModel(other, '-', self)
 
     def __mul__(self, other):
+        """Build a composite that multiplies this component by ``other``."""
 
         return CompositeModel(self, '*', other)
 
     def __rmul__(self, other):
+        """Right-side variant of :meth:`__mul__`."""
 
         return self.__mul__(other)
 
     def __truediv__(self, other):
+        """Build a composite that divides this component by ``other``."""
 
         return CompositeModel(self, '/', other)
 
     def __rtruediv__(self, other):
+        """Right-side variant of :meth:`__truediv__`."""
 
         return CompositeModel(other, '/', self)
 
@@ -377,43 +491,63 @@ class Model:
 
 
 class Additive(Model):
+    """Base for additive components; ``type`` is locked to ``'add'``."""
+
     @property
     def type(self):
+        """Model type tag, always ``'add'``."""
 
         return 'add'
 
     @type.setter
     def type(self, new_type):
+        """No-op; the type tag is fixed by subclassing :class:`Additive`."""
 
         pass
 
 
 class Multiplicative(Model):
+    """Base for dimensionless multiplicative components; ``type`` is ``'mul'``."""
+
     @property
     def type(self):
+        """Model type tag, always ``'mul'``."""
 
         return 'mul'
 
     @type.setter
     def type(self, new_type):
+        """No-op; the type tag is fixed by subclassing :class:`Multiplicative`."""
 
         pass
 
 
 class Mathematic(Model):
+    """Base for dimensionless mathematical components; ``type`` is ``'math'``."""
+
     @property
     def type(self):
+        """Model type tag, always ``'math'``."""
 
         return 'math'
 
     @type.setter
     def type(self, new_type):
+        """No-op; the type tag is fixed by subclassing :class:`Mathematic`."""
 
         pass
 
 
 class FrozenConst(Mathematic):
+    """Frozen scalar used to wrap numeric literals in composite expressions."""
+
     def __init__(self, value):
+        """Hold ``value`` as a single frozen parameter.
+
+        Args:
+            value: The numeric constant.
+        """
+
         super().__init__()
 
         self.expr = 'const'
@@ -423,13 +557,31 @@ class FrozenConst(Mathematic):
         self.params['$C$'] = Par(value, frozen=True)
 
     def func(self, X):
+        """Return the stored constant regardless of ``X``."""
 
         C = self.params['$C$'].value
         return C
 
 
 class CompositeModel(Model):
+    """Binary combination of two models under ``+``/``-``/``*``/``/``.
+
+    The composite's type is inferred from the operand types and the
+    operator via :attr:`tdict`; invalid combinations raise ``ValueError``.
+    Duplicate component names are made unique with a numeric suffix.
+    """
+
     def __init__(self, m1, op, m2):
+        """Wrap two operands and normalize numeric literals to ``FrozenConst``.
+
+        Args:
+            m1: Left operand -- a ``Model`` or numeric literal.
+            op: One of ``'+'``, ``'-'``, ``'*'``, ``'/'``.
+            m2: Right operand -- a ``Model`` or numeric literal.
+
+        Raises:
+            ValueError: If either operand has an unsupported type.
+        """
 
         self.op = op
 
@@ -460,11 +612,18 @@ class CompositeModel(Model):
 
     @property
     def expr(self):
+        """Parenthesized expression assembled from the two operands."""
 
         return f'({self.m1.expr}{self.op}{self.m2.expr})'
 
     @property
     def type(self):
+        """Derived composite type looked up in :attr:`tdict`.
+
+        Raises:
+            ValueError: If the operand-type pair is not an allowed combination.
+            AssertionError: If either operand has an unknown type tag.
+        """
 
         assert self.m1.type in self._allowed_types, f'unsupported model.type: {self.m1.type}'
         assert self.m2.type in self._allowed_types, f'unsupported model.type: {self.m2.type}'
@@ -479,10 +638,19 @@ class CompositeModel(Model):
 
     @property
     def comment(self):
+        """Concatenated per-component comments, one line per component."""
 
         return '\n'.join([f'{expr}: {mo.comment}' for expr, mo in self.mdicts.items()])
 
     def func(self, X):
+        """Evaluate the composite by dispatching on :attr:`op`.
+
+        Args:
+            X: Input array forwarded to both operands' ``func`` methods.
+
+        Raises:
+            ValueError: If ``op`` is not recognized.
+        """
 
         if self.op == '+':
             return self.m1.func(X) + self.m2.func(X)
@@ -497,11 +665,13 @@ class CompositeModel(Model):
 
     @property
     def mdicts(self):
+        """Merged component mapping from both operands."""
 
         return OrderedDict({**self.m1.mdicts, **self.m2.mdicts})
 
     @staticmethod
     def _generate_unique_name(name, family, number=2):
+        """Return ``name`` suffixed with the first integer not already in ``family``."""
 
         while True:
             new_name = f'{name}_{number}'
@@ -513,6 +683,10 @@ class CompositeModel(Model):
 
     @property
     def tdict(self):
+        """Lookup table mapping ``'<t1><op><t2>'`` strings to the composite type.
+
+        A value of ``False`` marks an illegal combination.
+        """
 
         return {
             'add+add': 'add',
