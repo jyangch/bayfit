@@ -1,3 +1,15 @@
+"""Container types for generic curve-fitting data.
+
+A :class:`DataUnit` bundles one set of curve data -- x/y values, optional
+x/y errors, per-point weights, upper-limit flags, and a statistic choice --
+into a single unit. Errors are normalised to a ``(2, npoint)`` array of
+``[low, high]`` rows regardless of whether the caller supplies a scalar,
+a symmetric 1-D array, or explicit asymmetric columns.  A :class:`Data`
+holds an ordered collection of ``DataUnit`` instances and exposes
+aggregated views of their counts, point numbers, and statistics, which
+the inference layer consumes.
+"""
+
 from collections import OrderedDict
 import inspect
 import json
@@ -9,7 +21,29 @@ from ..util.info import Info
 
 
 class Data:
+    """Ordered collection of :class:`DataUnit` objects.
+
+    Indexing with a key returns the stored :class:`DataUnit`; assignment
+    or deletion re-runs the aggregate extraction so cached views stay
+    consistent.
+
+    Attributes:
+        data: ``OrderedDict`` mapping names to :class:`DataUnit` instances.
+        exprs: Ordered list of registered names.
+        stats: Per-unit statistic strings in insertion order.
+        npoints: Integer array of per-unit point counts.
+    """
+
     def __init__(self, data=None):
+        """Build a container from a list of ``(name, unit)`` tuples or a dict.
+
+        Args:
+            data: ``None``, a list of ``(name, DataUnit)`` tuples, or a
+                dict mapping names to :class:`DataUnit` instances.
+
+        Raises:
+            ValueError: If ``data`` is not one of the supported input types.
+        """
 
         self.data = data
 
@@ -20,6 +54,11 @@ class Data:
 
     @data.setter
     def data(self, new_data):
+        """Replace the contents from a list of tuples or a dict and re-extract.
+
+        Raises:
+            ValueError: If ``new_data`` is not ``None``, a list, or a dict.
+        """
 
         self._data = OrderedDict()
 
@@ -61,16 +100,19 @@ class Data:
 
     @property
     def expr(self):
+        """Best-effort identifier for this container inferred from caller scope."""
 
         return self.get_obj_name() or 'data'
 
     @property
     def pdicts(self):
+        """Empty ``OrderedDict`` placeholder for parameter-dictionary compatibility."""
 
         return OrderedDict()
 
     @property
     def info(self):
+        """Tabular :class:`Info` view of per-unit name, point count, statistic, and upper limits."""
 
         info_dict = OrderedDict()
         info_dict['Name'] = [key for key in self.data]
@@ -82,6 +124,11 @@ class Data:
 
     @property
     def fit_with(self):
+        """Return the ``Model`` this data is bound to, or raise if unset.
+
+        Raises:
+            AttributeError: If no model has been assigned yet.
+        """
 
         try:
             return self._fit_with
@@ -90,6 +137,11 @@ class Data:
 
     @fit_with.setter
     def fit_with(self, new_model):
+        """Bind a ``Model`` to this data and keep the back-reference in sync.
+
+        Raises:
+            ValueError: If ``new_model`` is not a ``Model`` instance.
+        """
 
         from ..model.model import Model
 
@@ -107,6 +159,10 @@ class Data:
                 self._fit_with.fit_to = self
 
     def get_obj_name(self):
+        """Walk call frames and return the outermost local name bound to ``self``.
+
+        Returns ``None`` if no binding is found.
+        """
 
         frame = inspect.currentframe()
 
@@ -125,20 +181,24 @@ class Data:
         return None
 
     def __getitem__(self, key):
+        """Return the stored :class:`DataUnit` registered under ``key``."""
 
         return self._data[key]
 
     def __setitem__(self, key, value):
+        """Register ``value`` under ``key`` and re-run aggregate extraction."""
 
         self._setitem(key, value)
         self._extract()
 
     def __delitem__(self, key):
+        """Remove the entry under ``key`` and re-run aggregate extraction."""
 
         del self._data[key]
         self._extract()
 
     def __contains__(self, key):
+        """Return ``True`` when ``key`` is registered in this container."""
 
         return key in self._data
 
@@ -150,7 +210,46 @@ class Data:
 
 
 class DataUnit:
+    """One curve-data record with errors, weights, upper limits, and a statistic.
+
+    ``x`` and ``y`` are cast to ``float64`` arrays of length ``npoint``.
+    Both ``xerr`` and ``yerr`` are normalised to a ``(2, npoint)`` array
+    with rows ``[low, high]``; a scalar or ``None`` produces a uniform
+    array, a 1-D array is broadcast symmetrically, and a 2-D array is
+    accepted in either ``(2, npoint)`` or ``(npoint, 2)`` orientation.
+    Per-point weights default to ``1`` and upper-limit flags default to
+    ``False``.
+
+    Attributes:
+        x: Independent-variable values, shape ``(npoint,)``.
+        y: Dependent-variable values, shape ``(npoint,)``.
+        npoint: Number of data points.
+        xerr: X error array, shape ``(2, npoint)``, rows are ``[low, high]``.
+        yerr: Y error array, shape ``(2, npoint)``, rows are ``[low, high]``.
+        weight: Per-point fit weights, shape ``(npoint,)``.
+        up: Boolean upper-limit mask, shape ``(npoint,)``.
+        stat: Statistic identifier string (e.g. ``'chi^2'``).
+    """
+
     def __init__(self, x, y, xerr=None, yerr=None, weight=1, up=None, stat='chi^2', name=None):
+        """Initialise a data unit and normalise all error and weight arrays.
+
+        Args:
+            x: Independent-variable values; any array-like of length ``n``.
+            y: Dependent-variable values; any array-like of length ``n``.
+            xerr: X errors; ``None``, scalar, 1-D array of length ``n``, or
+                2-D array of shape ``(2, n)`` or ``(n, 2)``.  ``None``
+                defaults to ``0``.
+            yerr: Y errors; same shapes as ``xerr``.  ``None`` defaults to
+                ``1``.
+            weight: Per-point fit weight; scalar or array of length ``n``.
+                Defaults to ``1``.
+            up: Boolean upper-limit flag per point; array of length ``n``
+                or ``None`` (all ``False``).
+            stat: Statistic string used during fitting.  Defaults to
+                ``'chi^2'``.
+            name: Optional label for this unit.
+        """
 
         self.x = np.asarray(x, dtype=float)
         self.y = np.asarray(y, dtype=float)
@@ -225,6 +324,24 @@ class DataUnit:
 
     @classmethod
     def from_dict(cls, d, **kwargs):
+        """Construct a :class:`DataUnit` from a plain dictionary.
+
+        Recognised keys are ``'x'``, ``'y'``, ``'xerr'``, ``'yerr'``,
+        ``'weight'``, ``'up'``, ``'stat'``, and ``'name'``; all except
+        ``'x'`` and ``'y'`` are optional and fall back to the
+        :class:`DataUnit` defaults.  Extra keyword arguments are forwarded
+        to the constructor.
+
+        Args:
+            d: Mapping with at least ``'x'`` and ``'y'`` keys.
+            **kwargs: Additional keyword arguments passed to ``__init__``.
+
+        Raises:
+            KeyError: If ``d`` is missing ``'x'`` or ``'y'``.
+
+        Example:
+            >>> du = DataUnit.from_dict({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.2]})
+        """
 
         return cls(
             d['x'],
@@ -255,6 +372,46 @@ class DataUnit:
         stat='chi^2',
         name=None,
     ):
+        """Construct a :class:`DataUnit` from a ``pandas`` ``DataFrame``.
+
+        Column names for symmetric errors (``xerr``, ``yerr``) and
+        asymmetric error pairs (``xerr_low``/``xerr_high``,
+        ``yerr_low``/``yerr_high``) are resolved in this order:
+        explicit keyword arguments take precedence, otherwise columns
+        named ``'xerr'`` and ``'yerr'`` are detected automatically.
+        When both ``_low`` and ``_high`` columns are given, the result
+        is a ``(2, npoint)`` asymmetric error array; when only the
+        symmetric column is given, errors are broadcast symmetrically.
+
+        Args:
+            df: Source ``DataFrame``; must contain columns named by ``x``
+                and ``y``.
+            x: Column name for the independent variable.  Defaults to
+                ``'x'``.
+            y: Column name for the dependent variable.  Defaults to
+                ``'y'``.
+            xerr: Column name for symmetric x errors, or ``None``.
+            yerr: Column name for symmetric y errors, or ``None``.
+            xerr_low: Column name for the low x error bound, or ``None``.
+            xerr_high: Column name for the high x error bound, or ``None``.
+            yerr_low: Column name for the low y error bound, or ``None``.
+            yerr_high: Column name for the high y error bound, or ``None``.
+            weight: Column name for per-point weights, or ``None`` (uses
+                ``1`` for all points).
+            up: Column name for the boolean upper-limit mask, or ``None``
+                (all ``False``).
+            stat: Statistic identifier.  Defaults to ``'chi^2'``.
+            name: Optional label for the constructed unit.
+
+        Raises:
+            KeyError: If a specified column name is absent from ``df``.
+
+        Example:
+            >>> import pandas as pd
+            >>> df = pd.DataFrame({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.2]})
+            >>> du = DataUnit.from_dataframe(df)
+            >>> du_asym = DataUnit.from_dataframe(df, yerr_low='yerr', yerr_high='yerr')
+        """
 
         def col(c):
             return None if c is None else np.asarray(df[c], dtype=float)
@@ -283,6 +440,22 @@ class DataUnit:
 
     @classmethod
     def from_json(cls, path, **kwargs):
+        """Construct a :class:`DataUnit` by reading a JSON file.
+
+        The file must contain a JSON object with at least ``'x'`` and
+        ``'y'`` keys; the same optional keys accepted by
+        :meth:`from_dict` are also honoured.
+
+        Args:
+            path: Path to the JSON file.
+            **kwargs: Additional keyword arguments forwarded to
+                :meth:`from_dict`.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
+            json.JSONDecodeError: If the file is not valid JSON.
+            KeyError: If the object is missing ``'x'`` or ``'y'``.
+        """
 
         with open(path) as f:
             d = json.load(f)
@@ -291,6 +464,22 @@ class DataUnit:
 
     @classmethod
     def from_csv(cls, path, **kwargs):
+        """Construct a :class:`DataUnit` by reading a CSV file.
+
+        Column discovery follows the same rules as :meth:`from_dataframe`:
+        columns named ``'xerr'`` and ``'yerr'`` are auto-detected as
+        symmetric errors when no explicit error column names are given via
+        ``**kwargs``.
+
+        Args:
+            path: Path to the CSV file.
+            **kwargs: Additional keyword arguments forwarded to
+                :meth:`from_dataframe`.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
+            KeyError: If the required ``'x'`` or ``'y'`` column is absent.
+        """
 
         df = pd.read_csv(path)
 
@@ -298,6 +487,7 @@ class DataUnit:
 
     @property
     def name(self):
+        """User-assigned name if set, otherwise a best-effort caller-scope name."""
 
         try:
             return self._name
@@ -311,6 +501,7 @@ class DataUnit:
 
     @property
     def info(self):
+        """Tabular :class:`Info` view of the unit's point count, statistic, and upper-limit count."""
 
         info_dict = OrderedDict()
         info_dict['npoint'] = self.npoint
@@ -324,6 +515,10 @@ class DataUnit:
         return Info.from_dict(info_dict)
 
     def get_obj_name(self):
+        """Walk call frames and return the outermost local name bound to ``self``.
+
+        Returns ``None`` if no binding is found.
+        """
 
         frame = inspect.currentframe()
 
