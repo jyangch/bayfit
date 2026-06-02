@@ -7,6 +7,10 @@ def lin(x, params):
     return params[0] * np.asarray(x) + params[1]
 
 
+def _kw(x, y, xerr, yerr, w, up, params):
+    return dict(mo_func=lin, params=params, x=x, y=y, x_err=xerr, y_err=yerr, w=w, up=up)
+
+
 def test_chi_square_matches_manual():
     x = np.array([0.0, 1.0, 2.0])
     y = np.array([0.1, 2.1, 3.9])
@@ -16,9 +20,10 @@ def test_chi_square_matches_manual():
     up = np.zeros(3, dtype=bool)
     params = [2.0, 0.0]
     my = lin(x, params)
-    expected = -0.5 * np.sum((y - my) ** 2 / 0.1**2)
-    got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
-    assert np.isclose(got, expected)
+    expected_stat = np.sum((y - my) ** 2 / 0.1**2)
+    stat, _ = Statistic.chi_square(**_kw(x, y, xerr, yerr, w, up, params))
+    assert np.isclose(stat, expected_stat)
+    assert np.isclose(-0.5 * stat, -0.5 * expected_stat)
 
 
 def test_upper_limit_below_model_is_allowed():
@@ -30,8 +35,9 @@ def test_upper_limit_below_model_is_allowed():
     w = np.ones(1)
     up = np.array([True])
     params = [1.0, 0.0]  # model = 1.0 < y=5.0  -> allowed -> S=0
-    got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
-    assert got == 0.0
+    stat, residual = Statistic.chi_square(**_kw(x, y, xerr, yerr, w, up, params))
+    assert stat == 0.0
+    assert residual[0] == 0.0
 
 
 def test_upper_limit_above_model_is_forbidden():
@@ -41,9 +47,10 @@ def test_upper_limit_above_model_is_forbidden():
     xerr = np.zeros((2, 1))
     w = np.ones(1)
     up = np.array([True])
-    params = [1.0, 0.0]  # model = 1.0 > y=0.5 -> forbidden -> -inf
-    got = Statistic.chi_square(lin, params, x, y, xerr, yerr, w, up)
-    assert got == -np.inf
+    params = [1.0, 0.0]  # model = 1.0 > y=0.5 -> forbidden -> stat=inf
+    stat, residual = Statistic.chi_square(**_kw(x, y, xerr, yerr, w, up, params))
+    assert stat == np.inf
+    assert np.isinf(residual[0])
 
 
 def test_all_six_statistics_callable_finite():
@@ -57,5 +64,7 @@ def test_all_six_statistics_callable_finite():
     params = [1.0, 0.0, -1.0]
     for name in ['chi^2', 'chi^2f', 'logchi^2', 'vdr', 'odr', 'groth']:
         func = Statistic._allowed_stats[name]
-        val = func(lin, params, x, y, xerr, yerr, w, up)
-        assert np.isfinite(val), name
+        stat, _residual = func(
+            mo_func=lin, params=params, x=x, y=y, x_err=xerr, y_err=yerr, w=w, up=up
+        )
+        assert np.isfinite(stat), name
