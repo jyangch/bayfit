@@ -15,6 +15,15 @@ from .pair import Pair
 
 class Infer:
     def __init__(self, pairs=None):
+        """Build an inference from ``(Data, Model)`` pairs.
+
+        Args:
+            pairs: ``None`` or a list of ``(Data, Model)`` / ``(Model, Data)``
+                tuples.
+        """
+
+        self.loglike_func = None
+        self.logprior_func = None
 
         self.pairs = pairs
 
@@ -257,6 +266,24 @@ class Infer:
         return self._free_plabels
 
     @property
+    def clean_free_plabels(self):
+        """:attr:`free_plabels` with LaTeX ``$``, ``{``, ``}`` and ``\\`` removed."""
+
+        return [
+            pl.replace('$', '').replace('{', '').replace('}', '').replace('\\', '')
+            for pl in self._free_plabels
+        ]
+
+    @property
+    def clean_free_indexed_plabels(self):
+        """Clean free-parameter labels prefixed with their ``par#`` index."""
+
+        return [
+            f'p{key}({label})'
+            for label, key in zip(self.clean_free_plabels, self.free_par.keys(), strict=False)
+        ]
+
+    @property
     def free_pvalues(self):
 
         return self._free_pvalues
@@ -306,6 +333,18 @@ class Infer:
                 ys.append(pair.mo_func(unit.x, params))
 
         return ys
+
+    @property
+    def residual(self):
+        """Concatenated per-unit sigma residuals across all pairs."""
+
+        return [rd for pair in self.Pair for rd in pair.residual]
+
+    @property
+    def pseudo_residual(self):
+        """Concatenated per-unit pseudo-residual vector across all pairs."""
+
+        return np.hstack([pair.pseudo_residual for pair in self.Pair])
 
     @property
     def stat_list(self):
@@ -441,6 +480,30 @@ class Infer:
         self.at_par(theta)
 
         return np.sum([[pair.loglike for pair in self.Pair]])
+
+    def calc_loglike(self, theta):
+        """Apply ``theta`` and return the log-likelihood (or the user override)."""
+
+        self.at_par(theta)
+
+        if self.loglike_func is None:
+            return self.loglike
+        else:
+            return self.loglike_func(self, theta)
+
+    def calc_stat(self, theta):
+        """Apply ``theta`` and return the summed fit statistic."""
+
+        self.at_par(theta)
+
+        return self.stat
+
+    def calc_pseudo_residual(self, theta):
+        """Apply ``theta`` and return the concatenated pseudo-residual vector."""
+
+        self.at_par(theta)
+
+        return self.pseudo_residual
 
     def _prior_transform(self, cube):
 
