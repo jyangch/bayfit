@@ -1,6 +1,9 @@
 # Ignore Python bytecode cache directories
 __pycache__/
 
+# Ignore copilot instructions files
+.github/
+
 # Ignore Visual Studio Code directories and settings
 .vscode/
 
@@ -49,3 +52,10 @@ Icon?
 *.egg-info/
 build/
 dist/
+
+# Local-only docs and Claude Code project config
+docs/
+CLAUDE.md
+
+# Ignore test files
+test/
