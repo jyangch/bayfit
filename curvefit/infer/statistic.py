@@ -14,7 +14,7 @@ consistent and ``inf`` otherwise.
 All cores are numba-accelerated explicit loops; ``groth`` evaluates its
 Poisson series as ``log(I0(2*sqrt(y*my)))`` in log space (overflow-free).
 Every statistic shares one keyword bundle:
-``my, params, y, x_err, y_err, up, lo``, where ``my`` is the precomputed
+``my, params, y, xerr, yerr, up, lo``, where ``my`` is the precomputed
 model (float64) and ``params`` is the float64 parameter vector (used by the
 variance-fitting kernels to read ``logv``/``k``). No conversion or
 normalisation happens inside the statistics -- the caller (the data layer via
@@ -40,7 +40,7 @@ LINEAR_ONLY_STATS = frozenset({'chi2f', 'vdr', 'odr'})
 
 
 @nb.njit(cache=True, fastmath=True)
-def _chi_square_core(my, y, y_err, up, lo):
+def _chi_square_core(my, y, yerr, up, lo):
     """Numba kernel for ``chi2``; returns ``(stat, signed_residual)``."""
 
     n = y.shape[0]
@@ -51,8 +51,8 @@ def _chi_square_core(my, y, y_err, up, lo):
         yi = y[i]
         myi = my[i]
 
-        yerr = y_err[1, i] if yi < myi else y_err[0, i]
-        si = (yi - myi) ** 2 / yerr**2
+        yei = yerr[1, i] if yi < myi else yerr[0, i]
+        si = (yi - myi) ** 2 / yei**2
 
         if up[i]:
             si = 0.0 if yi >= myi else np.inf
@@ -68,7 +68,7 @@ def _chi_square_core(my, y, y_err, up, lo):
 
 
 @nb.njit(cache=True, fastmath=True)
-def _log_chi_square_core(my, y, y_err, up, lo):
+def _log_chi_square_core(my, y, yerr, up, lo):
     """Numba kernel for ``logchi2`` (chi-square in log10 space)."""
 
     n = y.shape[0]
@@ -80,9 +80,9 @@ def _log_chi_square_core(my, y, y_err, up, lo):
         logmy = np.log10(my[i])
 
         if logy < logmy:
-            logyerr = np.log10(y[i] + y_err[1, i]) - logy
+            logyerr = np.log10(y[i] + yerr[1, i]) - logy
         else:
-            logyerr = logy - np.log10(y[i] - y_err[0, i])
+            logyerr = logy - np.log10(y[i] - yerr[0, i])
 
         si = (logy - logmy) ** 2 / logyerr**2
 
@@ -100,7 +100,7 @@ def _log_chi_square_core(my, y, y_err, up, lo):
 
 
 @nb.njit(cache=True, fastmath=True)
-def _chi_square_full_core(my, y, y_err, up, lo, logv):
+def _chi_square_full_core(my, y, yerr, up, lo, logv):
     """Numba kernel for ``chi2f`` (extra log-variance ``logv``); returns ``stat``.
 
     No residual is produced: the fitted variance adds a ``log(2*pi*sigma^2)``
@@ -115,8 +115,8 @@ def _chi_square_full_core(my, y, y_err, up, lo, logv):
         yi = y[i]
         myi = my[i]
 
-        yerr = y_err[1, i] if yi < myi else y_err[0, i]
-        sigma2 = yerr**2 + 10.0 ** (2.0 * logv)
+        yei = yerr[1, i] if yi < myi else yerr[0, i]
+        sigma2 = yei**2 + 10.0 ** (2.0 * logv)
         si = (yi - myi) ** 2 / sigma2 + np.log(2.0 * np.pi * sigma2)
 
         if up[i]:
@@ -130,7 +130,7 @@ def _chi_square_full_core(my, y, y_err, up, lo, logv):
 
 
 @nb.njit(cache=True, fastmath=True)
-def _vdr_core(my, y, x_err, y_err, up, lo, k, logv):
+def _vdr_core(my, y, xerr, yerr, up, lo, k, logv):
     """Numba kernel for ``vdr`` (effective-variance regression, linear model).
 
     Returns ``stat`` only; the fitted variance makes the objective a
@@ -144,13 +144,13 @@ def _vdr_core(my, y, x_err, y_err, up, lo, k, logv):
         yi = y[i]
         myi = my[i]
 
-        yerr = y_err[1, i] if yi < myi else y_err[0, i]
+        yei = yerr[1, i] if yi < myi else yerr[0, i]
         if k > 0:
-            xerr = x_err[0, i] if yi < myi else x_err[1, i]
+            xei = xerr[0, i] if yi < myi else xerr[1, i]
         else:
-            xerr = x_err[1, i] if yi < myi else x_err[0, i]
+            xei = xerr[1, i] if yi < myi else xerr[0, i]
 
-        sigma2 = np.exp(2.0 * logv) + k**2 * xerr**2 + yerr**2
+        sigma2 = np.exp(2.0 * logv) + k**2 * xei**2 + yei**2
         si = (yi - myi) ** 2 / sigma2 + np.log(2.0 * np.pi * sigma2)
 
         if up[i]:
@@ -164,7 +164,7 @@ def _vdr_core(my, y, x_err, y_err, up, lo, k, logv):
 
 
 @nb.njit(cache=True, fastmath=True)
-def _odr_core(my, y, x_err, y_err, up, lo, k, logv):
+def _odr_core(my, y, xerr, yerr, up, lo, k, logv):
     """Numba kernel for ``odr`` (orthogonal-distance regression, linear model).
 
     Returns ``stat`` only; the fitted variance makes the objective a
@@ -178,14 +178,14 @@ def _odr_core(my, y, x_err, y_err, up, lo, k, logv):
         yi = y[i]
         myi = my[i]
 
-        yerr = y_err[1, i] if yi < myi else y_err[0, i]
+        yei = yerr[1, i] if yi < myi else yerr[0, i]
         if k > 0:
-            xerr = x_err[0, i] if yi < myi else x_err[1, i]
+            xei = xerr[0, i] if yi < myi else xerr[1, i]
         else:
-            xerr = x_err[1, i] if yi < myi else x_err[0, i]
+            xei = xerr[1, i] if yi < myi else xerr[0, i]
 
         delta2 = (yi - myi) ** 2 / (k**2 + 1.0)
-        sigma2 = (k**2 * xerr**2 + yerr**2) / (k**2 + 1.0) + np.exp(2.0 * logv)
+        sigma2 = (k**2 * xei**2 + yei**2) / (k**2 + 1.0) + np.exp(2.0 * logv)
         si = delta2 / sigma2 + np.log(2.0 * np.pi * sigma2)
 
         if up[i]:
@@ -261,8 +261,8 @@ def _groth_core(my, y):
 class Statistic:
     """Curve-fit statistic dispatch table returning ``{'stat', 'residual'}`` dicts.
 
-    Every method takes the shared keyword bundle ``my, params, y, x_err,
-    y_err, up, lo``, where ``my`` is the model already evaluated on the
+    Every method takes the shared keyword bundle ``my, params, y, xerr,
+    yerr, up, lo``, where ``my`` is the model already evaluated on the
     unit's x-grid (``float64``) and ``params`` is the model's ``float64``
     parameter vector (used by the variance-fitting statistics to read ``logv``
     and ``k``). Inputs are assumed to be ``float64``/``bool`` already, so no
@@ -282,7 +282,7 @@ class Statistic:
         """Gaussian chi-square with fixed per-point errors."""
 
         stat, residual = _chi_square_core(
-            kwargs['my'], kwargs['y'], kwargs['y_err'], kwargs['up'], kwargs['lo']
+            kwargs['my'], kwargs['y'], kwargs['yerr'], kwargs['up'], kwargs['lo']
         )
         return {'stat': stat, 'residual': residual}
 
@@ -291,7 +291,7 @@ class Statistic:
         """Chi-square evaluated in log10 space."""
 
         stat, residual = _log_chi_square_core(
-            kwargs['my'], kwargs['y'], kwargs['y_err'], kwargs['up'], kwargs['lo']
+            kwargs['my'], kwargs['y'], kwargs['yerr'], kwargs['up'], kwargs['lo']
         )
         return {'stat': stat, 'residual': residual}
 
@@ -308,7 +308,7 @@ class Statistic:
         stat = _chi_square_full_core(
             kwargs['my'],
             kwargs['y'],
-            kwargs['y_err'],
+            kwargs['yerr'],
             kwargs['up'],
             kwargs['lo'],
             params[-1],
@@ -328,8 +328,8 @@ class Statistic:
         stat = _vdr_core(
             kwargs['my'],
             kwargs['y'],
-            kwargs['x_err'],
-            kwargs['y_err'],
+            kwargs['xerr'],
+            kwargs['yerr'],
             kwargs['up'],
             kwargs['lo'],
             params[0],
@@ -350,8 +350,8 @@ class Statistic:
         stat = _odr_core(
             kwargs['my'],
             kwargs['y'],
-            kwargs['x_err'],
-            kwargs['y_err'],
+            kwargs['xerr'],
+            kwargs['yerr'],
             kwargs['up'],
             kwargs['lo'],
             params[0],
@@ -361,7 +361,7 @@ class Statistic:
 
     @staticmethod
     def groth(**kwargs):
-        """Groth exact-Poisson statistic; ``w``, ``up``, and ``lo`` are ignored.
+        """Groth exact-Poisson statistic; ``up`` and ``lo`` are ignored.
 
         Returns ``{'stat': stat}`` (no ``'residual'``); the objective is not a
         sum of squares, so a residual is undefined.

@@ -35,15 +35,32 @@ class Plot:
     class always uses matplotlib.
     """
 
+    colors = (
+        px.colors.qualitative.Plotly
+        + px.colors.qualitative.D3
+        + px.colors.qualitative.G10
+        + px.colors.qualitative.T10
+        + px.colors.qualitative.Alphabet
+    )
+
+    @staticmethod
+    def get_rgb(color, opacity=1.0):
+        """Convert a matplotlib color plus opacity into a Plotly ``rgba`` string."""
+
+        rgba = mpl.colors.to_rgba(color)
+        r, g, b = (int(x * 255) for x in rgba[:3])
+
+        return f'rgba({r}, {g}, {b}, {opacity:f})'
+
     @staticmethod
     def dataunit(cls, ploter='plotly', xlog=False, ylog=False):
-        """Plot a single ``DataUnit``'s observed spectrum.
+        """Plot a single ``DataUnit``'s observed data.
 
         Args:
             cls: ``DataUnit`` to plot; must be complete.
             ploter: Backend -- ``'plotly'`` or ``'matplotlib'``.
-            style: Display style -- e.g. ``'CC'`` counts/channel,
-                ``'CE'`` counts/keV, ``'NE'`` photon flux density.
+            xlog: If ``True``, use a logarithmic scale for the x-axis.
+            ylog: If ``True``, use a logarithmic scale for the y-axis.
 
         Returns:
             A :class:`Figure` wrapping the plot.
@@ -139,7 +156,8 @@ class Plot:
         Args:
             cls: ``Data`` whose units are drawn together.
             ploter: Backend -- ``'plotly'`` or ``'matplotlib'``.
-            style: Display style (see :meth:`dataunit`).
+            logx: If ``True``, use a logarithmic scale for the x-axis.
+            logy: If ``True``, use a logarithmic scale for the y-axis.
 
         Returns:
             A :class:`Figure` wrapping the plot.
@@ -251,7 +269,6 @@ class Plot:
             xlog: If ``True``, use a logarithmic scale for the x-axis.
             ylog: If ``True``, use a logarithmic scale for the y-axis.
             post: If ``True``, also draw the posterior credible band.
-            yrange: Optional ``(ymin, ymax)`` tuple for the y-axis.
 
         Returns:
             A fresh :class:`ModelPlot` ready for ``add_model`` calls.
@@ -265,7 +282,7 @@ class Plot:
     def pair(cls, ploter='plotly', xlog=False, ylog=False):
         """Plot data and model together for a ``Pair``, with residual panel.
 
-        The top panel shows observed and model spectra for every data unit;
+        The top panel shows observed and model curves for every data unit;
         the bottom panel shows residuals in units of sigma.
 
         Args:
@@ -279,7 +296,6 @@ class Plot:
 
         Raises:
             TypeError: If ``cls`` is not a ``Pair``.
-            ValueError: If ``style`` is not recognized.
         """
 
         if not isinstance(cls, Pair):
@@ -478,8 +494,8 @@ class Plot:
             cls: ``Infer`` or one of its subclasses (``Posterior``,
                 ``Bootstrap``) to visualize.
             ploter: Backend -- ``'plotly'`` or ``'matplotlib'``.
-            style: Display style (see :meth:`pair`).
-            rebin: Draw with re-binned channels when ``True``.
+            xlog: If ``True``, use a logarithmic scale for the x-axis.
+            ylog: If ``True``, use a logarithmic scale for the y-axis.
             at_par: Which parameter point to evaluate the model at --
                 ``'best'``, ``'best-ci'``, ``'median'``, ``'mean'``, or
                 ``'truth'``. Defaults to ``'best'`` for ``Posterior`` and
@@ -490,7 +506,7 @@ class Plot:
 
         Raises:
             TypeError: If ``cls`` is not an ``Infer``.
-            ValueError: If ``at_par`` or ``style`` is not recognized, or if
+            ValueError: If ``at_par`` is not recognized, or if
                 ``at_par='truth'`` but some parameters lack a truth value.
         """
 
@@ -894,17 +910,16 @@ class Plot:
 
 
 class ModelPlot:
-    """Accumulating figure that overlays multiple ``Model`` spectra.
+    """Accumulating figure that overlays multiple ``Model`` curves.
 
     Build one via :meth:`Plot.model`, then call :meth:`add_model` for each
-    model to compare, and finish with :meth:`get_fig`. The y-axis label
-    and which model spectra are valid depend on ``style``.
+    model to compare, and finish with :meth:`get_fig`.
 
     Attributes:
         ploter: Active backend (``'plotly'`` or ``'matplotlib'``).
-        style: Spectrum style (see :meth:`Plot.model`).
+        xlog: Whether the x-axis uses a logarithmic scale.
+        ylog: Whether the y-axis uses a logarithmic scale.
         post: Whether posterior credible bands are drawn alongside lines.
-        yrange: Optional y-axis range.
         fig: Underlying figure object from the chosen backend.
         fig_data: Raw plotted arrays keyed by model expression.
         model_index: Running count of models added; used for color cycling.
@@ -919,19 +934,13 @@ class ModelPlot:
     )
 
     def __init__(self, ploter='plotly', xlog=False, ylog=False, post=False):
-        """Initialize the figure for the requested backend and style.
+        """Initialize the figure for the requested backend.
 
         Args:
             ploter: ``'plotly'`` or ``'matplotlib'``.
             xlog: If ``True``, use a logarithmic scale for the x-axis.
             ylog: If ``True``, use a logarithmic scale for the y-axis.
-                ``'EENE'`` for additive models, ``'NoU'`` for
-                multiplicative/mathematical models.
             post: If ``True``, draw posterior credible bands.
-            yrange: Optional ``(ymin, ymax)`` tuple.
-
-        Raises:
-            ValueError: If ``style`` is not recognized.
         """
 
         self.ploter = ploter
@@ -982,16 +991,15 @@ class ModelPlot:
         return f'rgba({r}, {g}, {b}, {opacity:f})'
 
     def add_model(self, model, X, post=None, at_par=None):
-        """Draw ``model`` at energies ``E`` onto the accumulating figure.
+        """Draw ``model`` on the design grid ``X`` onto the accumulating figure.
 
-        The required model spectrum method is selected from ``style`` and
-        ``at_par``. When ``post`` is ``True`` the one-sigma credible band
-        is added alongside the point estimate.
+        When ``post`` is ``True`` the one-sigma credible band is added
+        alongside the point estimate.
 
         Args:
-            model: ``Model`` instance compatible with the current ``style``.
-            E: Energy grid (keV) at which to evaluate the model.
-            T: Optional time argument forwarded to time-dependent models.
+            model: ``Model`` instance to evaluate.
+            X: Design grid, shape ``(npoint, 1)``, at which to evaluate the
+                model (column ``0`` holds the x values).
             post: Overrides the instance-level ``post`` flag for this call.
             at_par: Which parameter point to evaluate at -- ``'best'``,
                 ``'best-ci'``, ``'median'``, ``'mean'``, or ``'truth'``.
@@ -1000,8 +1008,7 @@ class ModelPlot:
 
         Raises:
             TypeError: If ``model`` is not a ``Model``.
-            AttributeError: If the model type is incompatible with ``style``.
-            ValueError: If ``at_par`` or ``style`` is not recognized, or if
+            ValueError: If ``at_par`` is not recognized, or if
                 ``at_par='truth'`` but some parameters lack a truth value.
         """
 

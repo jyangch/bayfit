@@ -22,8 +22,8 @@ def _kwargs(stat, params, up=None):
         my=my,
         params=np.asarray(params, dtype=float),
         y=y,
-        x_err=xerr,
-        y_err=yerr,
+        xerr=xerr,
+        yerr=yerr,
         up=up,
         lo=lo,
     )

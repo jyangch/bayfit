@@ -475,8 +475,8 @@ class Infer:
         Every ``data_*``/``model_*`` property on this class flattens the
         same-named per-unit list from the underlying ``Data``/``Model`` across
         every pair, so downstream code can iterate the whole inference as one
-        per-unit sequence. The family covers ``data_x``, ``data_y``,
-        ``data_xerr``, ``data_yerr``, ``data_up``, ``data_lo``, and ``model_y``.
+        per-unit sequence. The family covers ``data_xs``, ``data_ys``,
+        ``data_xerr``, ``data_yerr``, ``data_ups``, ``data_los``, and ``model_ys``.
         """
 
         return [value for data in self.Data for value in data.xs]
@@ -926,7 +926,7 @@ class BayesInfer(Infer):
                 so different runs differ.
 
         Returns:
-            A :class:`~bayspec.infer.analyzer.Posterior`.
+            A :class:`~curvefit.infer.analyzer.Posterior`.
         """
 
         import pymultinest
@@ -1050,7 +1050,7 @@ class BayesInfer(Infer):
                 lets emcee draw fresh entropy, so different runs differ.
 
         Returns:
-            A :class:`~bayspec.infer.analyzer.Posterior`.
+            A :class:`~curvefit.infer.analyzer.Posterior`.
         """
 
         import emcee
@@ -1253,7 +1253,7 @@ class MaxLikeFit(Infer):
                 and summary JSON; pass ``None`` to skip disk IO.
 
         Returns:
-            A :class:`~bayspec.infer.analyzer.Bootstrap`.
+            A :class:`~curvefit.infer.analyzer.Bootstrap`.
         """
 
         import lmfit
@@ -1319,7 +1319,7 @@ class MaxLikeFit(Infer):
                 and summary JSON.
 
         Returns:
-            A :class:`~bayspec.infer.analyzer.Bootstrap`.
+            A :class:`~curvefit.infer.analyzer.Bootstrap`.
         """
 
         import iminuit

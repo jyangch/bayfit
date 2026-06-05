@@ -250,9 +250,10 @@ class Par:
 class Cfg(Par):
     """Configuration parameter: a ``Par`` permanently frozen with no prior.
 
-    ``Cfg`` represents values that configure a model (e.g. sample redshift
-    or selected channel) rather than quantities that inference should
-    estimate. They accept the same constructor signature as ``Par`` but
+    ``Cfg`` represents values that configure a model (e.g. a fixed
+    reference point or known instrument constant) rather than quantities
+    that inference should estimate. They accept the same constructor
+    signature as ``Par`` but
     ``prior`` and ``post`` are forced to ``None`` and ``frozen`` to
     ``True``.
     """

@@ -163,13 +163,13 @@ class Data:
 
     @property
     def xs(self):
-        """Per-unit ``x`` arrays (``float64`` by construction)."""
+        """Per-unit ``xs`` arrays (``float64`` by construction)."""
 
         return [unit.xs for unit in self.data.values()]
 
     @property
     def ys(self):
-        """Per-unit ``y`` arrays (``float64`` by construction) for the kernels."""
+        """Per-unit ``ys`` arrays (``float64`` by construction) for the kernels."""
 
         return [unit.ys for unit in self.data.values()]
 
@@ -275,7 +275,7 @@ class Data:
 class DataUnit:
     """One curve-data record with errors, weights, upper limits, and a statistic.
 
-    ``x`` and ``y`` are cast to ``float64`` arrays of length ``npoint``.
+    ``xs`` and ``ys`` are cast to ``float64`` arrays of length ``npoint``.
     Both ``xerr`` and ``yerr`` are normalised to a ``(2, npoint)`` array
     with rows ``[low, high]``; a scalar or ``None`` produces a uniform
     array, a 1-D array is broadcast symmetrically, and a 2-D array is
@@ -284,14 +284,14 @@ class DataUnit:
     default to ``False``.
 
     Attributes:
-        x: Independent-variable values, shape ``(npoint,)``.
-        y: Dependent-variable values, shape ``(npoint,)``.
+        xs: Independent-variable values, shape ``(npoint,)``.
+        ys: Dependent-variable values, shape ``(npoint,)``.
         npoint: Number of data points.
         xerr: X error array, shape ``(2, npoint)``, rows are ``[low, high]``.
         yerr: Y error array, shape ``(2, npoint)``, rows are ``[low, high]``.
         weight: Per-unit scalar fit weight.
-        up: Boolean upper-limit mask, shape ``(npoint,)``.
-        lo: Boolean lower-limit mask, shape ``(npoint,)``.
+        ups: Boolean upper-limit mask, shape ``(npoint,)``.
+        los: Boolean lower-limit mask, shape ``(npoint,)``.
         stat: Statistic identifier string (e.g. ``'chi2'``).
     """
 
@@ -299,21 +299,21 @@ class DataUnit:
         """Initialise a data unit and normalise all error and weight arrays.
 
         Args:
-            x: Independent-variable values; any array-like of length ``n``.
-            y: Dependent-variable values; any array-like of length ``n``.
+            xs: Independent-variable values; any array-like of length ``n``.
+            ys: Dependent-variable values; any array-like of length ``n``.
             yerr: Y errors; required.  Scalar, 1-D array of length ``n``, or
                 2-D array of shape ``(2, n)`` or ``(n, 2)``.  For an
                 unweighted (OLS) fit pass an explicit constant such as ``1``.
             xerr: X errors; same shapes as ``yerr``.  ``None`` defaults to
                 ``0`` (no x uncertainty).
-            weight: Per-unit scalar fit weight for this whole dataset.
-                Defaults to ``1``.
-            up: Boolean upper-limit flag per point; array of length ``n``
+            ups: Boolean upper-limit flag per point; array of length ``n``
                 or ``None`` (all ``False``).
-            lo: Boolean lower-limit flag per point; array of length ``n``
+            los: Boolean lower-limit flag per point; array of length ``n``
                 or ``None`` (all ``False``).
             stat: Statistic string used during fitting.  Defaults to
                 ``'chi2'``.
+            weight: Per-unit scalar fit weight for this whole dataset.
+                Defaults to ``1``.
 
         Raises:
             ValueError: If ``yerr`` is ``None``, if any error, weight, or
@@ -389,17 +389,16 @@ class DataUnit:
         """Construct a :class:`DataUnit` from a plain dictionary.
 
         Recognised keys are ``'xs'``, ``'ys'``, ``'yerr'``, ``'xerr'``,
-        ``'weight'``, ``'ups'``, ``'los'``, ``'stat'``, and ``'name'``; all
-        except ``'xs'``, ``'ys'``, and ``'yerr'`` are optional and fall back to
-        the :class:`DataUnit` defaults.  Extra keyword arguments are forwarded
-        to the constructor.
+        ``'weight'``, ``'ups'``, ``'los'``, and ``'stat'``; all except
+        ``'xs'``, ``'ys'``, and ``'yerr'`` are optional and fall back to the
+        :class:`DataUnit` defaults.  The key used for each field can be
+        overridden via the matching keyword argument.
 
         Args:
-            d: Mapping with at least ``'xs'``, ``'ys'``, and ``'yerr'`` keys.
-            **kwargs: Additional keyword arguments passed to ``__init__``.
+            dict: Mapping with at least ``'xs'``, ``'ys'``, and ``'yerr'`` keys.
 
         Raises:
-            KeyError: If ``d`` is missing ``'xs'``, ``'ys'``, or ``'yerr'``.
+            KeyError: If ``dict`` is missing ``'xs'``, ``'ys'``, or ``'yerr'``.
 
         Example:
             >>> du = DataUnit.from_dict({'xs': [1, 2], 'ys': [3, 4], 'yerr': [0.1, 0.2]})
@@ -435,43 +434,37 @@ class DataUnit:
     ):
         """Construct a :class:`DataUnit` from a ``pandas`` ``DataFrame``.
 
-        Column names for symmetric errors (``xerr``, ``yerr``) and
-        asymmetric error pairs (``xerr_low``/``xerr_high``,
-        ``yerr_low``/``yerr_high``) are resolved in this order:
-        explicit keyword arguments take precedence, otherwise columns
-        named ``'xerr'`` and ``'yerr'`` are detected automatically.
-        When both ``_low`` and ``_high`` columns are given, the result
-        is a ``(2, npoint)`` asymmetric error array; when only the
-        symmetric column is given, errors are broadcast symmetrically.
+        Each argument names the column to read for that field; a column
+        that is absent from ``df`` is treated as not supplied.  For errors,
+        when both ``_low`` and ``_high`` columns are present the result is a
+        ``(2, npoint)`` asymmetric array; when only the symmetric column is
+        present, errors are broadcast symmetrically.
 
         Args:
-            df: Source ``DataFrame``; must contain columns named by ``x``
-                and ``y``.
-            x: Column name for the independent variable.  Defaults to
-                ``'x'``.
-            y: Column name for the dependent variable.  Defaults to
-                ``'y'``.
-            xerr: Column name for symmetric x errors, or ``None``.
-            yerr: Column name for symmetric y errors, or ``None``.
-            xerr_low: Column name for the low x error bound, or ``None``.
-            xerr_high: Column name for the high x error bound, or ``None``.
-            yerr_low: Column name for the low y error bound, or ``None``.
-            yerr_high: Column name for the high y error bound, or ``None``.
+            df: Source ``DataFrame``; must contain the columns named by
+                ``xs`` and ``ys``.
+            xs: Column name for the independent variable.  Defaults to
+                ``'xs'``.
+            ys: Column name for the dependent variable.  Defaults to
+                ``'ys'``.
+            xerr: Column name for symmetric x errors.
+            yerr: Column name for symmetric y errors.
+            xerr_low: Column name for the low x error bound.
+            xerr_high: Column name for the high x error bound.
+            yerr_low: Column name for the low y error bound.
+            yerr_high: Column name for the high y error bound.
+            ups: Column name for the boolean upper-limit mask.
+            los: Column name for the boolean lower-limit mask.
+            stat: Statistic identifier.  Defaults to ``'chi2'``.
             weight: Per-unit scalar weight for this whole dataset.  Defaults
                 to ``1``.
-            up: Column name for the boolean upper-limit mask, or ``None``
-                (all ``False``).
-            lo: Column name for the boolean lower-limit mask, or ``None``
-                (all ``False``).
-            stat: Statistic identifier.  Defaults to ``'chi2'``.
-            name: Optional label for the constructed unit.
 
         Raises:
-            KeyError: If a specified column name is absent from ``df``.
+            KeyError: If a required column is absent from ``df``.
 
         Example:
             >>> import pandas as pd
-            >>> df = pd.DataFrame({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.2]})
+            >>> df = pd.DataFrame({'xs': [1, 2], 'ys': [3, 4], 'yerr': [0.1, 0.2]})
             >>> du = DataUnit.from_dataframe(df)
             >>> du_asym = DataUnit.from_dataframe(df, yerr_low='yerr', yerr_high='yerr')
         """
@@ -501,19 +494,17 @@ class DataUnit:
     def from_json(cls, path):
         """Construct a :class:`DataUnit` by reading a JSON file.
 
-        The file must contain a JSON object with at least ``'x'`` and
-        ``'y'`` keys; the same optional keys accepted by
+        The file must contain a JSON object with at least ``'xs'``,
+        ``'ys'``, and ``'yerr'`` keys; the same optional keys accepted by
         :meth:`from_dict` are also honoured.
 
         Args:
             path: Path to the JSON file.
-            **kwargs: Additional keyword arguments forwarded to
-                :meth:`from_dict`.
 
         Raises:
             FileNotFoundError: If ``path`` does not exist.
             json.JSONDecodeError: If the file is not valid JSON.
-            KeyError: If the object is missing ``'x'`` or ``'y'``.
+            KeyError: If the object is missing ``'xs'``, ``'ys'``, or ``'yerr'``.
         """
 
         with open(path) as f:
@@ -525,17 +516,16 @@ class DataUnit:
     def from_csv(cls, path):
         """Construct a :class:`DataUnit` by reading a CSV file.
 
-        Column discovery follows the same rules as :meth:`from_dataframe`:
-        columns named ``'xerr'`` and ``'yerr'`` are auto-detected as
-        symmetric errors when no explicit error column names are given via
-        ``**kwargs``.
+        Columns are read by the default names used by :meth:`from_dataframe`
+        (``'xs'``, ``'ys'``, ``'yerr'``, ``'xerr'``, and the asymmetric
+        error-bound columns when present).
 
         Args:
             path: Path to the CSV file.
 
         Raises:
             FileNotFoundError: If ``path`` does not exist.
-            KeyError: If the required ``'x'`` or ``'y'`` column is absent.
+            KeyError: If the required ``'xs'`` or ``'ys'`` column is absent.
         """
 
         df = pd.read_csv(path)

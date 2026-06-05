@@ -24,8 +24,8 @@ def test_free_params_and_dof():
 
 def test_calc_loglike_best_at_truth():
     infer, _data, _model = _make_infer()
-    ll_truth = infer._loglike([2.0, 1.0])
-    ll_off = infer._loglike([0.0, 0.0])
+    ll_truth = infer.calc_loglike([2.0, 1.0])
+    ll_off = infer.calc_loglike([0.0, 0.0])
     assert ll_truth > ll_off
     assert np.isclose(ll_truth, 0.0, atol=1e-6)
 
@@ -45,8 +45,8 @@ def test_data_up_and_lo_aggregated():
         x,
         y,
         yerr=np.full(4, 0.1),
-        up=[True, False, False, False],
-        lo=[False, False, False, True],
+        ups=[True, False, False, False],
+        los=[False, False, False, True],
         stat='chi2',
     )
     data = Data([('d', unit)])

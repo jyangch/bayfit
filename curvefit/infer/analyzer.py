@@ -1,9 +1,9 @@
 """Post-fit analyzers for posterior samples and bootstrap ensembles.
 
-:class:`SampleAnalyzer` absorbs an :class:`~bayspec.infer.infer.Infer`
+:class:`SampleAnalyzer` absorbs an :class:`~curvefit.infer.infer.Infer`
 instance, reads a 2D sample matrix (``param_sample`` plus a trailing
 log-probability column), attaches the draws to every free parameter's
-:class:`~bayspec.util.post.Post`, and exposes point estimates, credible
+:class:`~curvefit.util.post.Post`, and exposes point estimates, credible
 intervals, and model-selection scores (AIC/AICc/BIC, optionally ``lnZ``).
 
 :class:`Posterior` and :class:`Bootstrap` are thin subclasses that pick

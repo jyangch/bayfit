@@ -19,8 +19,8 @@ def _kw(x, y, xerr, yerr, up, params, lo=None):
         my=my,
         params=np.asarray(params, dtype=float),
         y=np.asarray(y, dtype=float),
-        x_err=np.asarray(xerr, dtype=float),
-        y_err=np.asarray(yerr, dtype=float),
+        xerr=np.asarray(xerr, dtype=float),
+        yerr=np.asarray(yerr, dtype=float),
         up=up,
         lo=lo,
     )

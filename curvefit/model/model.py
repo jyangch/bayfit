@@ -258,8 +258,7 @@ class Model:
 
         Returns one ``float64`` array per data unit (in ``fit_to`` order),
         computed at the model's current parameters and ready to feed the
-        statistic kernels without further conversion. Mirrors bayspec's
-        ``conv_ctsrate``.
+        statistic kernels without further conversion.
         """
 
         return [

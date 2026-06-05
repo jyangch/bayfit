@@ -5,7 +5,7 @@ matplotlib.use('Agg')
 import numpy as np
 
 from curvefit.data.data import Data, DataUnit
-from curvefit.infer.infer import Infer
+from curvefit.infer.infer import BayesInfer
 from curvefit.model.local import line
 from curvefit.util.plot import Plot
 
@@ -22,7 +22,7 @@ def test_emcee_recovers_linear(tmp_path):
     model = line()
     model.params['logv'].frozen = True
 
-    infer = Infer([(data, model)])
+    infer = BayesInfer([(data, model)])
     post = infer.emcee(nstep=400, discard=100, resume=False, savepath=str(tmp_path))
 
     k = post.par_best_ci[0]
@@ -30,7 +30,7 @@ def test_emcee_recovers_linear(tmp_path):
     assert abs(k - 2.0) < 0.3
     assert abs(b - 1.0) < 1.0
 
-    fig = Plot.infer(post, nsample=50, ngrid=50)
+    fig = Plot.infer(post)
     assert fig is not None
     cfig = Plot.post_corner(post)
     assert cfig is not None
@@ -51,7 +51,7 @@ def test_plot_infer_handles_limit_points(tmp_path):
     lo[20] = True  # lower limit sits well below the line -> consistent
     y[20] = 2.0 * x[20] + 1.0 - 10.0
 
-    unit = DataUnit(x, y, yerr=yerr, up=up, lo=lo, stat='chi2')
+    unit = DataUnit(x, y, yerr=yerr, ups=up, los=lo, stat='chi2')
     data = Data([('d', unit)])
     model = line()
     model.params['logv'].frozen = True
@@ -59,10 +59,10 @@ def test_plot_infer_handles_limit_points(tmp_path):
     model.params['k'].val = 2.0
     model.params['b'].val = 1.0
 
-    infer = Infer([(data, model)])
+    infer = BayesInfer([(data, model)])
     post = infer.emcee(nstep=400, discard=100, resume=False, savepath=str(tmp_path))
 
     assert abs(post.par_best_ci[0] - 2.0) < 0.3
 
-    fig = Plot.infer(post, nsample=50, ngrid=50)
+    fig = Plot.infer(post)
     assert fig is not None

@@ -133,11 +133,11 @@ class Pair:
     def stat_func(self):
         """Closure returning the per-unit statistic; ``+inf`` when ``my`` is non-finite."""
 
-        return lambda my, params, y, x_err, y_err, up, lo, stat: (
+        return lambda my, params, y, xerr, yerr, up, lo, stat: (
             np.inf
             if not np.isfinite(my).all()
             else self._allowed_stats[stat](
-                my=my, params=params, y=y, x_err=x_err, y_err=y_err, up=up, lo=lo
+                my=my, params=params, y=y, xerr=xerr, yerr=yerr, up=up, lo=lo
             ).get('stat')
         )
 
@@ -145,11 +145,11 @@ class Pair:
     def pseudo_residual_func(self):
         """Closure returning the per-unit pseudo-residual; ``inf`` array when ``my`` is non-finite."""
 
-        return lambda my, params, y, x_err, y_err, up, lo, stat: (
+        return lambda my, params, y, xerr, yerr, up, lo, stat: (
             np.ones_like(my) * np.inf
             if not np.isfinite(my).all()
             else self._allowed_stats[stat](
-                my=my, params=params, y=y, x_err=x_err, y_err=y_err, up=up, lo=lo
+                my=my, params=params, y=y, xerr=xerr, yerr=yerr, up=up, lo=lo
             ).get('residual')
         )
 

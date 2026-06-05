@@ -45,8 +45,8 @@ def test_pair_propagates_lower_limit():
         x,
         y,
         yerr=np.full(4, 0.1),
-        up=[False, False, False, False],
-        lo=[False, False, False, True],
+        ups=[False, False, False, False],
+        los=[False, False, False, True],
         stat='chi2',
     )
     data = Data([('d', unit)])

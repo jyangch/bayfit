@@ -2,22 +2,22 @@ import numpy as np
 
 from curvefit.data.data import Data, DataUnit
 from curvefit.infer.analyzer import Bootstrap, Posterior, SampleAnalyzer
-from curvefit.infer.infer import Infer
+from curvefit.infer.infer import BayesInfer, MaxLikeFit
 from curvefit.model.local import line
 
 
-def _infer():
+def _infer(cls):
     x = np.linspace(0, 10, 20)
     y = 2.0 * x + 1.0
     unit = DataUnit(x, y, yerr=np.full(x.size, 0.3), stat='chi2')
     data = Data([('d', unit)])
     model = line()
     model.params['logv'].frozen = True
-    return Infer([(data, model)])
+    return cls([(data, model)])
 
 
 def test_bootstrap_from_sample_matrix():
-    infer = _infer()
+    infer = _infer(MaxLikeFit)
     infer._you_free()
     nfree = infer.free_nparams
     # fabricate a bootstrap sample: first row is the best fit
@@ -38,7 +38,7 @@ def test_bootstrap_from_sample_matrix():
 
 
 def test_posterior_still_works():
-    infer = _infer()
+    infer = _infer(BayesInfer)
     infer._you_free()
     nfree = infer.free_nparams
     rng = np.random.default_rng(1)
