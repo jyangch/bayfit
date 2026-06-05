@@ -6,7 +6,7 @@ import numpy as np
 
 from curvefit.data.data import Data, DataUnit
 from curvefit.infer.infer import Infer
-from curvefit.model.local import ln
+from curvefit.model.local import line
 from curvefit.util.plot import Plot
 
 
@@ -17,9 +17,9 @@ def test_emcee_recovers_linear(tmp_path):
     yerr = np.full(x.size, 0.5)
     y = ytrue + rng.normal(0, 0.5, x.size)
 
-    unit = DataUnit(x, y, yerr=yerr, stat='chi^2')
+    unit = DataUnit(x, y, yerr=yerr, stat='chi2')
     data = Data([('d', unit)])
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
 
     infer = Infer([(data, model)])
@@ -34,3 +34,35 @@ def test_emcee_recovers_linear(tmp_path):
     assert fig is not None
     cfig = Plot.post_corner(post)
     assert cfig is not None
+
+
+def test_plot_infer_handles_limit_points(tmp_path):
+    # a dataset mixing detections, an upper limit, and a lower limit must
+    # fit and plot without error
+    rng = np.random.default_rng(1)
+    x = np.linspace(0, 10, 30)
+    y = 2.0 * x + 1.0 + rng.normal(0, 0.5, x.size)
+    yerr = np.full(x.size, 0.5)
+
+    up = np.zeros(x.size, dtype=bool)
+    lo = np.zeros(x.size, dtype=bool)
+    up[5] = True  # upper limit sits well above the line -> consistent
+    y[5] = 2.0 * x[5] + 1.0 + 10.0
+    lo[20] = True  # lower limit sits well below the line -> consistent
+    y[20] = 2.0 * x[20] + 1.0 - 10.0
+
+    unit = DataUnit(x, y, yerr=yerr, up=up, lo=lo, stat='chi2')
+    data = Data([('d', unit)])
+    model = line()
+    model.params['logv'].frozen = True
+    # start from a feasible point where both limits are already satisfied
+    model.params['k'].val = 2.0
+    model.params['b'].val = 1.0
+
+    infer = Infer([(data, model)])
+    post = infer.emcee(nstep=400, discard=100, resume=False, savepath=str(tmp_path))
+
+    assert abs(post.par_best_ci[0] - 2.0) < 0.3
+
+    fig = Plot.infer(post, nsample=50, ngrid=50)
+    assert fig is not None

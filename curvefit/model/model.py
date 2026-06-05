@@ -253,6 +253,32 @@ class Model:
             self.par[i + 1].val = thi
 
     @property
+    def ys(self):
+        """Model evaluated on each bound ``fit_to`` unit's x-grid, as ``float64`` arrays.
+
+        Returns one ``float64`` array per data unit (in ``fit_to`` order),
+        computed at the model's current parameters and ready to feed the
+        statistic kernels without further conversion. Mirrors bayspec's
+        ``conv_ctsrate``.
+        """
+
+        return [
+            self.func(np.asarray(unit.xs)[:, None]).astype(float)
+            for unit in self.fit_to.data.values()
+        ]
+
+    @property
+    def ps(self):
+        """Parameter vector repeated once per bound ``fit_to`` data unit, as ``float64``.
+
+        Parallels :attr:`ys`: a length-``n_unit`` list whose every element is
+        the full ``float64`` parameter vector, aligned with the data units so
+        the statistic map receives one ``params`` per unit.
+        """
+
+        return [np.array([float(v) for v in self.pvalues])] * len(self.fit_to.data)
+
+    @property
     def par_mean(self):
         """Per-parameter posterior mean (or frozen value when applicable)."""
 

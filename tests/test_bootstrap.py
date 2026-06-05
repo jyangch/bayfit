@@ -1,17 +1,17 @@
 import numpy as np
 
 from curvefit.data.data import Data, DataUnit
+from curvefit.infer.analyzer import Bootstrap, Posterior, SampleAnalyzer
 from curvefit.infer.infer import Infer
-from curvefit.infer.posterior import Bootstrap, Posterior, SampleAnalyzer
-from curvefit.model.local import ln
+from curvefit.model.local import line
 
 
 def _infer():
     x = np.linspace(0, 10, 20)
     y = 2.0 * x + 1.0
-    unit = DataUnit(x, y, yerr=np.full(x.size, 0.3), stat='chi^2')
+    unit = DataUnit(x, y, yerr=np.full(x.size, 0.3), stat='chi2')
     data = Data([('d', unit)])
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
     return Infer([(data, model)])
 

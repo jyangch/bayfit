@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 
 from curvefit.data.data import Data, DataUnit
+from curvefit.infer.analyzer import Bootstrap
 from curvefit.infer.infer import MaxLikeFit
-from curvefit.infer.posterior import Bootstrap
-from curvefit.model.local import ln
+from curvefit.model.local import line
 
 
-def _data(seed=0, stat='chi^2'):
+def _data(seed=0, stat='chi2'):
     rng = np.random.default_rng(seed)
     x = np.linspace(0, 10, 40)
     yerr = np.full(x.size, 0.5)
@@ -18,7 +18,7 @@ def _data(seed=0, stat='chi^2'):
 
 def test_lmfit_recovers_linear():
     data = _data()
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
     fit = MaxLikeFit([(data, model)])
     boot = fit.lmfit()
@@ -31,7 +31,7 @@ def test_lmfit_recovers_linear():
 
 def test_iminuit_recovers_linear():
     data = _data(seed=1)
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
     fit = MaxLikeFit([(data, model)])
     boot = fit.iminuit()
@@ -40,8 +40,8 @@ def test_iminuit_recovers_linear():
 
 
 def test_iminuit_handles_chi2f_freevariance():
-    data = _data(seed=2, stat='chi^2f')
-    model = ln()  # k, b, logv all free
+    data = _data(seed=2, stat='chi2f')
+    model = line()  # k, b, logv all free
     fit = MaxLikeFit([(data, model)])
     boot = fit.iminuit()
     assert isinstance(boot, Bootstrap)
@@ -50,7 +50,7 @@ def test_iminuit_handles_chi2f_freevariance():
 
 def test_lmfit_rejects_free_variance_stats():
     data = _data(seed=3, stat='vdr')
-    model = ln()
+    model = line()
     fit = MaxLikeFit([(data, model)])
     with pytest.raises(ValueError):
         fit.lmfit()

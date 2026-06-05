@@ -17,14 +17,14 @@ from ...util.prior import unif
 from ..model import Additive
 
 
-class ln(Additive):
+class line(Additive):
     """Linear curve :math:`y = k x + b`."""
 
     def __init__(self):
         """Initialise linear model with slope ``k``, intercept ``b``, log-variance ``logv``."""
         super().__init__()
 
-        self.expr = 'ln'
+        self.expr = 'line'
         self.comment = 'linear model'
 
         self.params = OrderedDict()

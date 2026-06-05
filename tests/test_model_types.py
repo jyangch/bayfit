@@ -30,9 +30,9 @@ def test_base_model_default_type():
 
 
 def test_composite_type_add_plus_add():
-    from curvefit.model.local import ln, pl
+    from curvefit.model.local import line, pl
 
-    assert (ln() + pl()).type == 'add'
+    assert (line() + pl()).type == 'add'
 
 
 def test_composite_type_add_times_mul():
@@ -44,13 +44,13 @@ def test_composite_type_add_times_mul():
 def test_illegal_composite_raises():
     import pytest
 
-    from curvefit.model.local import ln, pl
+    from curvefit.model.local import line, pl
 
     with pytest.raises(ValueError):
-        _ = (ln() * pl()).type  # add * add is illegal
+        _ = (line() * pl()).type  # add * add is illegal
 
 
 def test_const_plus_add_is_add():
-    from curvefit.model.local import const, ln
+    from curvefit.model.local import const, line
 
-    assert (ln() + const()).type == 'add'
+    assert (line() + const()).type == 'add'

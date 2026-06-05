@@ -5,11 +5,13 @@ on its tag, and publishes the total statistic, per-bin pseudo-residuals
 (for lmfit), sigma residuals (for plots), and the log-likelihood.
 """
 
+from types import MappingProxyType
+
 import numpy as np
 
 from ..data.data import Data
 from ..model.model import Model
-from .statistic import Statistic
+from .statistic import LINEAR_ONLY_STATS, Statistic
 
 
 class Pair:
@@ -23,7 +25,16 @@ class Pair:
         model: The bound :class:`~curvefit.model.model.Model`.
     """
 
-    _allowed_stats = Statistic._allowed_stats
+    _allowed_stats = MappingProxyType(
+        {
+            'chi2': Statistic.chi_square,
+            'chi2f': Statistic.chi_square_full,
+            'logchi2': Statistic.log_chi_square,
+            'vdr': Statistic.vdr,
+            'odr': Statistic.odr,
+            'groth': Statistic.groth,
+        }
+    )
 
     def __init__(self, data, model):
         """Pair ``data`` with ``model`` and wire the ``fit_with`` reference.
@@ -77,49 +88,111 @@ class Pair:
 
         self.data.fit_with = self.model
 
-    def mo_func(self, x, params):
-        """Set ``params`` on the model and evaluate it on x-grid ``x``."""
+        self._check_stats_compatible()
 
-        self.model.at_par(params)
+    def _check_stats_compatible(self):
+        """Reject variance-fitting statistics on models other than ``line``.
 
-        return self.model.func(np.asarray(x, dtype=float)[:, None])
+        ``chi2f``/``vdr``/``odr`` read a trailing ``logv`` (and ``vdr``/``odr``
+        assume the linear ``[k, b, logv]`` layout), so they are only valid for
+        the :class:`~curvefit.model.local.line` model.
+
+        Raises:
+            ValueError: If any unit uses such a statistic with a non-``line`` model.
+        """
+
+        from ..model.local import line
+
+        for unit in self.data.data.values():
+            stat = unit.stat
+
+            if stat in LINEAR_ONLY_STATS and not isinstance(self.model, line):
+                raise ValueError(
+                    f"statistic '{stat}' is only valid for the linear 'line' model "
+                    f"[k, b, logv]; model '{self.model.expr}' is not a line model"
+                )
 
     @property
-    def pvalues(self):
-        """Full ordered raw-value vector (``Par.val``) of the model."""
+    def residuals(self):
+        """Per-unit sigma residuals ``(y - model) / yerr`` for diagnostics/plots.
 
-        return [par.val for par in self.model.par.values()]
+        ``yerr`` is the asymmetric ``[low, high]`` error selected per point by
+        the sign of ``y - model``.
+        """
 
-    def _kwargs(self, unit):
-        """Assemble the shared statistic keyword bundle for one data unit."""
+        return list(
+            map(
+                lambda yi, mi, ei: (yi - mi) / np.where(yi < mi, ei[1], ei[0]),
+                self.data.ys,
+                self.model.ys,
+                self.data.yerr,
+            )
+        )
 
-        return {
-            'mo_func': self.mo_func,
-            'params': self.pvalues,
-            'x': unit.x,
-            'y': unit.y,
-            'x_err': unit.xerr,
-            'y_err': unit.yerr,
-            'w': unit.weight,
-            'up': unit.up,
-        }
+    @property
+    def stat_func(self):
+        """Closure returning the per-unit statistic; ``+inf`` when ``my`` is non-finite."""
+
+        return lambda my, params, y, x_err, y_err, up, lo, stat: (
+            np.inf
+            if not np.isfinite(my).all()
+            else self._allowed_stats[stat](
+                my=my, params=params, y=y, x_err=x_err, y_err=y_err, up=up, lo=lo
+            ).get('stat')
+        )
+
+    @property
+    def pseudo_residual_func(self):
+        """Closure returning the per-unit pseudo-residual; ``inf`` array when ``my`` is non-finite."""
+
+        return lambda my, params, y, x_err, y_err, up, lo, stat: (
+            np.ones_like(my) * np.inf
+            if not np.isfinite(my).all()
+            else self._allowed_stats[stat](
+                my=my, params=params, y=y, x_err=x_err, y_err=y_err, up=up, lo=lo
+            ).get('residual')
+        )
 
     def _stat_calculate(self):
 
         return np.array(
-            [self._allowed_stats[u.stat](**self._kwargs(u))[0] for u in self.data.data.values()],
+            list(
+                map(
+                    self.stat_func,
+                    self.model.ys,
+                    self.model.ps,
+                    self.data.ys,
+                    self.data.xerr,
+                    self.data.yerr,
+                    self.data.ups,
+                    self.data.los,
+                    self.data.stats,
+                )
+            ),
             dtype=float,
         )
 
     def _pseudo_residual_calculate(self):
 
-        return [self._allowed_stats[u.stat](**self._kwargs(u))[1] for u in self.data.data.values()]
+        return list(
+            map(
+                self.pseudo_residual_func,
+                self.model.ys,
+                self.model.ps,
+                self.data.ys,
+                self.data.xerr,
+                self.data.yerr,
+                self.data.ups,
+                self.data.los,
+                self.data.stats,
+            )
+        )
 
     @property
     def stat_list(self):
         """Per-unit statistic values."""
 
-        return self._stat_calculate()
+        return np.array(self._stat_calculate())
 
     @property
     def pseudo_residual_list(self):
@@ -129,9 +202,9 @@ class Pair:
 
     @property
     def weight_list(self):
-        """Per-unit weights; point weights live inside ``w``, so this is ones."""
+        """Per-unit scalar weights applied to each unit's statistic."""
 
-        return np.ones(len(self.data.data))
+        return self.data.weights
 
     @property
     def stat(self):
@@ -143,19 +216,12 @@ class Pair:
     def pseudo_residual(self):
         """Pseudo-residual vector concatenated across units (lmfit target)."""
 
-        return np.concatenate(self.pseudo_residual_list)
-
-    @property
-    def residual(self):
-        """Per-unit sigma residuals ``(y - model) / yerr`` for diagnostics/plots."""
-
-        out = list()
-        for u in self.data.data.values():
-            my = np.asarray(self.mo_func(u.x, self.pvalues), dtype=float)
-            yerr = np.where(u.y < my, u.yerr[1], u.yerr[0])
-            out.append((u.y - my) / yerr)
-
-        return out
+        return np.concatenate(
+            [
+                rd * np.sqrt(wt)
+                for rd, wt in zip(self.pseudo_residual_list, self.weight_list, strict=False)
+            ]
+        )
 
     @property
     def loglike_list(self):

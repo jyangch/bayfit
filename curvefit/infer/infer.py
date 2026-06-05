@@ -9,18 +9,18 @@ bootstrap sampling.
 """
 
 from collections import OrderedDict
+from collections.abc import Callable
 import ctypes
 import json
 import os
 import warnings
 
 import numpy as np
-from scipy.optimize import minimize
 
 from ..data.data import Data
 from ..model.model import Model
 from ..util.info import Info
-from ..util.tools import JsonEncoder, SuperDict
+from ..util.tools import JsonEncoder, SuperDict, json_dump
 from .pair import Pair
 
 
@@ -48,10 +48,13 @@ class Infer:
                 tuples.
         """
 
+        self.pairs = pairs
+
         self.loglike_func = None
         self.logprior_func = None
+        self.prior_transform_func = None
 
-        self.pairs = pairs
+        self.inference_type = 'Inference'
 
     @property
     def pairs(self):
@@ -131,24 +134,26 @@ class Infer:
         if self.pairs is None:
             raise ValueError('pairs is None')
 
+        self.nparis = len(self.pairs)
+
         self.Data = [pair[0] for pair in self.pairs]
         self.Model = [pair[1] for pair in self.pairs]
         self.Pair = [Pair(*pair) for pair in self.pairs]
 
-        self.data_exprs = [key for data in self.Data for key in data.exprs]
+        self.data_names = [key for data in self.Data for key in data.names]
         self.model_exprs = [model.expr for model in self.Model]
 
         self._you_free()
 
     @property
-    def pdicts(self):
-        """Mapping from every model/data expression to its ``pdicts`` dictionary."""
-
-        return OrderedDict([(md.expr, md.pdicts) for md in (self.Model + self.Data)])
-
-    @property
     def cdicts(self):
         """Mapping from every model expression to its ``cdicts`` dictionary."""
+
+        return OrderedDict([(mo.expr, mo.cdicts) for mo in self.Model])
+
+    @property
+    def pdicts(self):
+        """Mapping from every model/data expression to its ``pdicts`` dictionary."""
 
         return OrderedDict([(mo.expr, mo.pdicts) for mo in self.Model])
 
@@ -174,13 +179,19 @@ class Infer:
         pid = 0
         par = SuperDict()
 
-        for md in self.Model + self.Data:
-            for params in md.pdicts.values():
+        for mo in self.Model:
+            for params in mo.pdicts.values():
                 for pr in params.values():
                     pid += 1
                     par[str(pid)] = pr
 
         return par
+
+    @property
+    def pvalues(self):
+        """Tuple of current parameter values, preserving ``par`` order."""
+
+        return tuple([pr.value for pr in self.par.values()])
 
     @staticmethod
     def foo(id):
@@ -199,8 +210,8 @@ class Infer:
         pid = 0
         idpid = SuperDict()
 
-        for md in self.Model + self.Data:
-            for params in md.pdicts.values():
+        for mo in self.Model:
+            for params in mo.pdicts.values():
                 for pr in params.values():
                     pid += 1
                     if str(id(pr)) not in idpid:
@@ -241,8 +252,8 @@ class Infer:
         pid = 0
         all_params = list()
 
-        for md in self.Model + self.Data:
-            for expr, params in md.pdicts.items():
+        for mo in self.Model:
+            for expr, params in mo.pdicts.items():
                 for pl, pr in params.items():
                     pid += 1
 
@@ -254,7 +265,7 @@ class Infer:
                     all_params.append(
                         {
                             'par#': str(pid),
-                            'Expression': md.expr,
+                            'Expression': mo.expr,
                             'Component': expr,
                             'Parameter': pl,
                             'Value': pr.val,
@@ -363,8 +374,17 @@ class Infer:
         ]
 
     @property
+    def free_indexed_plabels(self):
+        """Free-parameter labels prefixed with their ``par#`` index."""
+
+        return [
+            f'p{key}({label})'
+            for label, key in zip(self.free_plabels, self.free_par.keys(), strict=False)
+        ]
+
+    @property
     def clean_free_indexed_plabels(self):
-        """Clean free-parameter labels prefixed with their ``par#`` index."""
+        """Indexed labels with LaTeX markup removed."""
 
         return [
             f'p{key}({label})'
@@ -387,153 +407,12 @@ class Infer:
         return self._free_nparams
 
     @property
-    def data_x(self):
-        """Concatenated x arrays from every data unit across all pairs.
-
-        Every ``data_*`` property on this class collects the same-named
-        attribute from each ``DataUnit`` over every pair into a list, so
-        downstream code can iterate per unit. The family
-        covers ``data_x``, ``data_y``, ``data_xerr``, ``data_yerr``, and
-        ``data_up``.
-        """
-
-        return [unit.x for pair in self.Pair for unit in pair.data.data.values()]
-
-    @property
-    def data_y(self):
-
-        return [unit.y for pair in self.Pair for unit in pair.data.data.values()]
-
-    @property
-    def data_xerr(self):
-
-        return [unit.xerr for pair in self.Pair for unit in pair.data.data.values()]
-
-    @property
-    def data_yerr(self):
-
-        return [unit.yerr for pair in self.Pair for unit in pair.data.data.values()]
-
-    @property
-    def data_up(self):
-
-        return [unit.up for pair in self.Pair for unit in pair.data.data.values()]
-
-    @property
-    def model_y(self):
-        """Concatenated model-predicted y values evaluated at the current parameters."""
-
-        ys = list()
-        for pair in self.Pair:
-            params = pair.pvalues
-            for unit in pair.data.data.values():
-                ys.append(pair.mo_func(unit.x, params))
-
-        return ys
-
-    @property
-    def residual(self):
-        """Concatenated per-unit sigma residuals across all pairs."""
-
-        return [rd for pair in self.Pair for rd in pair.residual]
-
-    @property
-    def pseudo_residual(self):
-        """Concatenated per-unit pseudo-residual vector across all pairs."""
-
-        return np.hstack([pair.pseudo_residual for pair in self.Pair])
-
-    @property
-    def stat_list(self):
-        """Concatenated per-unit fit statistic across every pair."""
-
-        return np.hstack([pair.stat_list for pair in self.Pair])
-
-    @property
-    def weight_list(self):
-        """Concatenated per-unit weights across every pair."""
-
-        return np.hstack([pair.weight_list for pair in self.Pair])
-
-    @property
-    def stat(self):
-        """Summed fit statistic across every pair."""
-
-        return np.sum(self.stat_list * self.weight_list)
-
-    @property
-    def loglike_list(self):
-        """Concatenated per-unit log-likelihood across every pair."""
-
-        return -0.5 * self.stat_list
-
-    @property
-    def loglike(self):
-        """Summed log-likelihood across every pair."""
-
-        return -0.5 * self.stat
-
-    @property
-    def npoint_list(self):
-        """Concatenated per-unit data-point counts across every pair."""
-
-        return np.hstack([pair.npoint_list for pair in self.Pair])
-
-    @property
-    def npoint(self):
-        """Total number of fitted data points across every pair."""
-
-        return np.sum(self.npoint_list)
-
-    @property
-    def dof(self):
-        """Degrees of freedom: :attr:`npoint` minus the free-parameter count."""
-
-        return self.npoint - self.free_nparams
-
-    @property
-    def prior_list(self):
-        """Per-parameter prior densities evaluated at the current free values."""
-
-        return [par.prior.pdf(par.val) for par in self.free_par.values()]
-
-    @property
-    def logprior(self):
-        """Joint log-prior as the log of the product of :attr:`prior_list`."""
-
-        return np.log(np.prod(self.prior_list))
-
-    @property
-    def all_stat(self):
-        """Per-pair statistic summary plus a totals row, ready for ``Info.from_dict``."""
-
-        all_stat = OrderedDict(
-            [
-                ('Data', ['Total']),
-                ('Model', ['Total']),
-                ('Statistic', ['stat/dof']),
-                ('Value', [f'{self.stat:.2f}/{self.dof:d}']),
-                ('Bins', [f'{self.npoint:d}']),
-            ]
-        )
-
-        for dt, mo in zip(self.Data, self.Model, strict=False):
-            mex = mo.expr
-            for sex, stat in zip(dt.exprs, dt.stats, strict=False):
-                all_stat['Data'].insert(-1, sex)
-                all_stat['Model'].insert(-1, mex)
-                all_stat['Statistic'].insert(-1, stat)
-
-        all_stat['Value'] = [f'{stat:.2f}' for stat in self.stat_list] + all_stat['Value']
-        all_stat['Bins'] = [f'{point:d}' for point in self.npoint_list] + all_stat['Bins']
-
-        return all_stat
-
-    @property
     def cfg_info(self):
         """Tabular :class:`Info` view of every configuration parameter."""
 
-        return Info.from_list_dict(self.all_config)
+        all_config = self.all_config.copy()
+
+        return Info.from_list_dict(all_config)
 
     @property
     def par_info(self):
@@ -550,15 +429,15 @@ class Infer:
                 if par['Frozen']:
                     par['Prior'] = 'frozen'
                 else:
-                    par['Prior'] = f'=par#{{{",".join(par["Mates"])}}}'
+                    par['Prior'] = '=par#{{{}}}'.format(','.join(par['Mates']))
 
-        par_info = Info.list_dict_to_dict(all_params)
+        all_params = Info.list_dict_to_dict(all_params)
 
-        del par_info['Posterior']
-        del par_info['Mates']
-        del par_info['Frozen']
+        del all_params['Posterior']
+        del all_params['Mates']
+        del all_params['Frozen']
 
-        return Info.from_dict(par_info)
+        return Info.from_dict(all_params)
 
     @property
     def free_par_info(self):
@@ -566,44 +445,320 @@ class Infer:
 
         self._you_free()
 
-        free_par_info = Info.list_dict_to_dict(self.free_params)
+        free_params = self.free_params.copy()
 
-        del free_par_info['Posterior']
-        del free_par_info['Mates']
-        del free_par_info['Frozen']
+        free_params = Info.list_dict_to_dict(free_params)
 
-        return Info.from_dict(free_par_info)
+        del free_params['Posterior']
+        del free_params['Mates']
+        del free_params['Frozen']
+
+        return Info.from_dict(free_params)
+
+    def save(self, savepath):
+        """Dump config and parameter tables under ``savepath``.
+
+        Args:
+            savepath: Directory path. Created if missing.
+        """
+
+        if not os.path.exists(savepath):
+            os.makedirs(savepath)
+
+        json_dump(self.cfg_info.data_list_dict, savepath + '/infer_cfg.json')
+        json_dump(self.par_info.data_list_dict, savepath + '/infer_par.json')
+
+    @property
+    def data_xs(self):
+        """Per-unit x arrays flattened across every bound ``Data``.
+
+        Every ``data_*``/``model_*`` property on this class flattens the
+        same-named per-unit list from the underlying ``Data``/``Model`` across
+        every pair, so downstream code can iterate the whole inference as one
+        per-unit sequence. The family covers ``data_x``, ``data_y``,
+        ``data_xerr``, ``data_yerr``, ``data_up``, ``data_lo``, and ``model_y``.
+        """
+
+        return [value for data in self.Data for value in data.xs]
+
+    @property
+    def data_ys(self):
+
+        return [value for data in self.Data for value in data.ys]
+
+    @property
+    def data_xerr(self):
+
+        return [value for data in self.Data for value in data.xerr]
+
+    @property
+    def data_yerr(self):
+
+        return [value for data in self.Data for value in data.yerr]
+
+    @property
+    def data_ups(self):
+
+        return [value for data in self.Data for value in data.ups]
+
+    @property
+    def data_los(self):
+
+        return [value for data in self.Data for value in data.los]
+
+    @property
+    def model_ys(self):
+        """Per-unit model-predicted y arrays flattened across every bound ``Model``."""
+
+        return [value for model in self.Model for value in model.ys]
+
+    @property
+    def residuals(self):
+        """Per-unit sigma residuals ``(y - model) / yerr`` for diagnostics/plots.
+
+        ``yerr`` is the asymmetric ``[low, high]`` error selected per point by
+        the sign of ``y - model``.
+        """
+
+        return list(
+            map(
+                lambda yi, mi, ei: (yi - mi) / np.where(yi < mi, ei[1], ei[0]),
+                self.data_ys,
+                self.model_ys,
+                self.data_yerr,
+            )
+        )
+
+    @property
+    def prior_list(self):
+        """Per-parameter prior densities evaluated at the current free values."""
+
+        return [par.prior.pdf(par.val) for par in self.free_par.values()]
+
+    @property
+    def prior(self):
+        """Joint prior density as the product of :attr:`prior_list`."""
+
+        return np.prod(self.prior_list)
+
+    @property
+    def logprior(self):
+        """Joint log-prior; ``-inf`` when the prior vanishes."""
+
+        if self.prior == 0:
+            return -np.inf
+        else:
+            return np.log(self.prior)
+
+    @property
+    def stat_list(self):
+        """Concatenated per-unit fit statistic across every pair."""
+
+        return np.hstack([pair.stat_list for pair in self.Pair])
+
+    @property
+    def pseudo_residual_list(self):
+        """Concatenated per-unit pseudo-residual arrays across every pair."""
+
+        return [rd for pair in self.Pair for rd in pair.pseudo_residual_list]
+
+    @property
+    def weight_list(self):
+        """Concatenated per-unit weights across every pair."""
+
+        return np.hstack([pair.weight_list for pair in self.Pair])
+
+    @property
+    def stat(self):
+        """Summed fit statistic across every pair."""
+
+        return np.sum([pair.stat for pair in self.Pair])
+
+    @property
+    def pseudo_residual(self):
+        """Concatenated weight-scaled pseudo-residual vector across every pair."""
+
+        return np.hstack([pair.pseudo_residual for pair in self.Pair])
+
+    @property
+    def loglike_list(self):
+        """Concatenated per-unit log-likelihood across every pair."""
+
+        return np.hstack([pair.loglike_list for pair in self.Pair])
+
+    @property
+    def loglike(self):
+        """Summed log-likelihood across every pair."""
+
+        return np.sum([pair.loglike for pair in self.Pair])
+
+    @property
+    def npoint_list(self):
+        """Concatenated per-unit data-point counts across every pair."""
+
+        return np.hstack([pair.npoint_list for pair in self.Pair])
+
+    @property
+    def npoint(self):
+        """Total number of fitted data points across every pair."""
+
+        return np.sum([pair.npoint for pair in self.Pair])
+
+    @property
+    def dof(self):
+        """Degrees of freedom: :attr:`npoint` minus the free-parameter count."""
+
+        return self.npoint - self.free_nparams
+
+    @property
+    def all_stat(self):
+        """Per-pair statistic summary plus a totals row, ready for ``Info.from_dict``."""
+
+        all_stat = OrderedDict()
+        all_stat['Data'] = ['Total']
+        all_stat['Model'] = ['Total']
+        all_stat['Statistic'] = ['stat/dof']
+        all_stat['Value'] = [f'{self.stat:.3f}/{self.dof:d}']
+        all_stat['Bins'] = [self.npoint]
+
+        for dt, mo in zip(self.Data, self.Model, strict=False):
+            mex = mo.expr
+            for sex, stat in zip(dt.names, dt.stats, strict=False):
+                all_stat['Data'].insert(-1, sex)
+                all_stat['Model'].insert(-1, mex)
+                all_stat['Statistic'].insert(-1, stat)
+
+        all_stat['Value'] = [stat for stat in self.stat_list] + all_stat['Value']
+        all_stat['Bins'] = [point for point in self.npoint_list] + all_stat['Bins']
+
+        return all_stat
 
     @property
     def stat_info(self):
         """Tabular :class:`Info` view of :attr:`all_stat`."""
 
-        return Info.from_dict(self.all_stat)
+        all_stat = self.all_stat.copy()
+
+        return Info.from_dict(all_stat)
+
+    def __str__(self):
+
+        return (
+            f'*** {self.inference_type} ***\n'
+            f'*** Configurations ***\n'
+            f'{self.cfg_info.text_table}\n'
+            f'*** Parameters ***\n'
+            f'{self.par_info.text_table}'
+        )
+
+    def __repr__(self):
+
+        return self.__str__()
+
+    def _repr_html_(self):
+
+        return (
+            f'{self.cfg_info.html_style}'
+            f'<details open>'
+            f'<summary style="margin-bottom: 10px;"><b>{self.inference_type}</b></summary>'
+            f'<details open style="margin-top: 10px;">'
+            f'<summary style="margin-bottom: 10px;"><b>Configurations</b></summary>'
+            f'{self.cfg_info.html_table}'
+            f'</details>'
+            f'<details open style="margin-top: 10px;">'
+            f'<summary style="margin-bottom: 10px;"><b>Parameters</b></summary>'
+            f'{self.par_info.html_table}'
+            f'</details>'
+            f'</details>'
+        )
 
     def at_par(self, theta):
         """Write free-parameter values from the 1-indexed sequence ``theta``."""
 
-        theta = np.array(theta, dtype=float)
-
         for i, thi in enumerate(theta):
             self.free_par[i + 1].val = thi
 
-    def _loglike(self, theta):
-        """Apply ``theta`` and return the raw summed log-likelihood."""
+    @property
+    def prior_transform_func(self):
+        """Optional user override for the unit-cube to prior transform."""
 
-        self.at_par(theta)
+        return self._prior_transform_func
 
-        return np.sum([[pair.loglike for pair in self.Pair]])
+    @prior_transform_func.setter
+    def prior_transform_func(self, new_prior_transform_func):
+        """Install a user-provided prior-transform callable or clear it with ``None``.
 
-    def calc_loglike(self, theta):
-        """Apply ``theta`` and return the log-likelihood (or the user override)."""
+        Raises:
+            ValueError: If the argument is neither callable nor ``None``.
+        """
 
-        self.at_par(theta)
-
-        if self.loglike_func is None:
-            return self.loglike
+        if isinstance(new_prior_transform_func, (Callable, type(None))):
+            self._prior_transform_func = new_prior_transform_func
         else:
-            return self.loglike_func(self, theta)
+            raise ValueError('prior_transform_func is expected to be Callable or None')
+
+    @property
+    def logprior_func(self):
+        """Optional user override for the log-prior computation."""
+
+        return self._logprior_func
+
+    @logprior_func.setter
+    def logprior_func(self, new_logprior_func):
+        """Install a user-provided log-prior callable or clear it with ``None``."""
+
+        if isinstance(new_logprior_func, (Callable, type(None))):
+            self._logprior_func = new_logprior_func
+        else:
+            raise ValueError('logprior_func is expected to be Callable or None')
+
+    @property
+    def loglike_func(self):
+        """Optional user override for the log-likelihood computation."""
+
+        return self._loglike_func
+
+    @loglike_func.setter
+    def loglike_func(self, new_loglike_func):
+        """Install a user-provided log-likelihood callable or clear it with ``None``."""
+
+        if isinstance(new_loglike_func, (Callable, type(None))):
+            self._loglike_func = new_loglike_func
+        else:
+            raise ValueError('loglike_func is expected to be Callable or None')
+
+    def prior_transform(self, cube):
+        """Transform a unit cube to parameter space via each prior's inverse CDF.
+
+        Delegates to :attr:`prior_transform_func` when it has been set.
+
+        Args:
+            cube: Array-like of length :attr:`free_nparams` in ``[0, 1]``.
+
+        Returns:
+            Transformed parameter vector of the same length.
+        """
+
+        if self.prior_transform_func is None:
+            theta = np.array(cube)
+
+            for i, cui in enumerate(cube):
+                theta[i] = self.free_par[i + 1].prior.ppf(cui)
+
+            return theta
+
+        else:
+            return self.prior_transform_func(self, cube)
+
+    def calc_logprior(self, theta):
+        """Apply ``theta`` and return the log-prior (or the user override)."""
+
+        self.at_par(theta)
+
+        if self.logprior_func is None:
+            return self.logprior
+        else:
+            return self.logprior_func(self, theta)
 
     def calc_stat(self, theta):
         """Apply ``theta`` and return the summed fit statistic."""
@@ -619,254 +774,358 @@ class Infer:
 
         return self.pseudo_residual
 
-    def _prior_transform(self, cube):
-        """Transform a unit-cube sample to parameter space via each prior's inverse CDF."""
+    def calc_loglike(self, theta):
+        """Apply ``theta`` and return the log-likelihood (or the user override)."""
 
-        theta = np.array(cube)
+        self.at_par(theta)
 
-        for i, cui in enumerate(cube):
-            theta[i] = self.free_par[i + 1].prior.ppf(cui)
-
-        return theta
-
-    def _logprior(self, theta):
-        """Return the joint log-prior at ``theta``; ``-inf`` outside the prior support."""
-
-        pprs = np.zeros_like(theta)
-
-        for i, thi in enumerate(theta):
-            pprs[i] = self.free_par[i + 1].prior.pdf(thi)
-
-        ppr = np.prod(pprs)
-
-        if ppr == 0:
-            return -np.inf
+        if self.loglike_func is None:
+            return self.loglike
         else:
-            return np.log(ppr)
+            return self.loglike_func(self, theta)
 
-    def _logprior_sample(self, theta_sample):
-        """Vectorized log-prior over a sample matrix; returns ``-inf`` where it vanishes."""
-
-        pprs_sample = np.zeros_like(theta_sample)
-
-        for i in range(theta_sample.shape[1]):
-            pprs_sample[:, i] = self.free_par[i + 1].prior.pdf(theta_sample[:, i])
-
-        ppr_sample = np.prod(pprs_sample, axis=1)
-
-        return np.where(ppr_sample == 0, -np.inf, np.log(ppr_sample))
-
-    def _logprob(self, theta):
+    def calc_logprob(self, theta):
         """Return the unnormalised log-posterior; ``-inf`` outside the prior support."""
 
-        return self._logprior(theta) + self._loglike(theta)
+        lp = self.calc_logprior(theta)
 
-    def __str__(self):
+        if not np.isfinite(lp):
+            return -np.inf
 
-        print(self.cfg_info.table)
-        print(self.par_info.table)
+        return lp + self.calc_loglike(theta)
 
-        return ''
+    def calc_logprior_sample(self, theta_sample):
+        """Vectorized log-prior over a sample matrix; returns ``-inf`` where it vanishes.
 
-    def multinest_loglike(self, cube, ndim, nparams):
-        """MultiNest C-callback log-likelihood; writes free parameters from ``cube``."""
+        Args:
+            theta_sample: ``(nsample, nparams)`` array of draws.
 
-        theta = np.array([cube[i] for i in range(ndim)], dtype=float)
+        Returns:
+            ``(nsample,)`` array of log-prior values.
+        """
 
-        for i, thi in enumerate(theta):
-            self.free_par[i + 1].val = thi
+        prior_list_sample = np.zeros_like(theta_sample, dtype=float)
 
-        return np.sum([[pair.loglike for pair in self.Pair]])
+        for i in range(theta_sample.shape[1]):
+            prior_list_sample[:, i] = self.free_par[i + 1].prior.pdf(theta_sample[:, i])
 
-    def multinest_prior_transform(self, cube, ndim, nparams):
-        """MultiNest C-callback prior transform; writes transformed values into ``cube``."""
+        prior_sample = np.prod(prior_list_sample, axis=1)
 
-        for i in range(ndim):
-            cube[i] = self.free_par[i + 1].prior.ppf(cube[i])
+        return np.where(prior_sample == 0, -np.inf, np.log(prior_sample))
 
-    def multinest(self, nlive=500, resume=True, savepath='./'):
-        """Run MultiNest and return a :class:`~curvefit.infer.posterior.Posterior`.
+
+class BayesInfer(Infer):
+    """:class:`Infer` extension that wires up MultiNest and emcee drivers.
+
+    Adds ``multinest`` and ``emcee`` methods that run the samplers,
+    persist chains to ``savepath``, and return a :class:`Posterior` for
+    downstream analysis.
+    """
+
+    def __init__(self, pairs=None):
+        """Initialise like :class:`Infer` and tag the inference type."""
+        super().__init__(pairs=pairs)
+
+        self.inference_type = 'Bayesian Inference'
+
+    def multinest_prior_transform(self, cube):
+        """MultiNest-facing wrapper around :meth:`prior_transform`."""
+
+        return self.prior_transform(cube)
+
+    def multinest_calc_loglike(self, theta):
+        """MultiNest-facing wrapper around :meth:`calc_loglike`."""
+
+        return self.calc_loglike(theta)
+
+    def multinest_safe_prior_transform(self, cube, ndim, nparams):
+        """MultiNest C-callback wrapper that writes ``cube`` in place.
+
+        Terminates the process on any Python-level exception so MultiNest
+        does not silently swallow it.
+        """
+
+        try:
+            cube_arr = np.array([cube[i] for i in range(ndim)])
+            theta_arr = self.multinest_prior_transform(cube_arr)
+            for i in range(ndim):
+                cube[i] = theta_arr[i]
+        except Exception as e:
+            import sys
+
+            sys.stderr.write(f'ERROR in prior: {e}\n')
+            sys.exit(1)
+
+    def multinest_safe_calc_loglike(self, cube, ndim, nparams, lnew):
+        """MultiNest C-callback log-likelihood; returns ``-2e100`` when non-finite."""
+
+        try:
+            cube_arr = np.array([cube[i] for i in range(ndim)])
+            ll = float(self.multinest_calc_loglike(cube_arr))
+            if not np.isfinite(ll):
+                return -2e100
+            return ll
+        except Exception as e:
+            import sys
+
+            sys.stderr.write(f'ERROR in loglikelihood: {e}\n')
+            sys.exit(1)
+
+    @staticmethod
+    def _read_ns_global_evidence(stats_file):
+        """Parse the plain NS global log-evidence value from a MultiNest stats file.
+
+        Args:
+            stats_file: Path to MultiNest's ``stats.dat``.
+
+        Returns:
+            The nested-sampling global log-evidence as a float, or ``None`` if the
+            line cannot be read. Used as a fallback when INS writes an unparseable
+            subnormal evidence that breaks ``get_stats``.
+        """
+
+        try:
+            with open(stats_file) as f:
+                line = f.readline()
+            value = line.split(':', 1)[1].split('+/-')[0]
+            return float(value)
+        except (OSError, IndexError, ValueError):
+            return None
+
+    def multinest(
+        self,
+        nlive=500,
+        resume=True,
+        verbose=False,
+        max_iter=None,
+        ins=True,
+        savepath='./',
+        random_seed=None,
+    ):
+        """Run MultiNest and return a :class:`Posterior` wrapping the result.
 
         Args:
             nlive: Number of live points.
             resume: Resume from any chain already present under ``savepath``.
+            verbose: Forward MultiNest's verbose flag.
+            max_iter: Hard cap on nested-sampling iterations, a backstop
+                against runs that never reach the evidence tolerance (e.g.
+                likelihood plateaus). ``None`` (default) caps at
+                ``nlive * 50``, well above the ``~nlive * H`` a normal run
+                needs, so it never clips genuine convergence. A run that hits
+                this cap has not converged; its result is unreliable.
+            ins: Enable INS for a more accurate evidence. ``True``
+                (default) suits most fits, but INS weights can underflow
+                when the posterior rails against a hard prior boundary,
+                yielding a NaN/subnormal evidence that corrupts
+                ``stats.dat``. Set ``False`` for such boundary-pinned fits
+                to fall back to the robust plain nested-sampling evidence.
             savepath: Directory for MultiNest outputs and cached samples.
+            random_seed: Seed forwarded to MultiNest for reproducible runs.
+                ``None`` (default) lets MultiNest pick a system-time seed,
+                so different runs differ.
 
         Returns:
-            A :class:`~curvefit.infer.posterior.Posterior`.
+            A :class:`~bayspec.infer.analyzer.Posterior`.
         """
 
         import pymultinest
 
-        from .posterior import Posterior
+        from .analyzer import Posterior
+
+        self.sampler_type = 'nested'
 
         self._you_free()
 
-        self.nlive = nlive
-        self.resume = resume
-        self.prefix = savepath + '/1-'
+        max_iter = nlive * 50 if max_iter is None else int(max_iter)
+
+        savepath_prefix = savepath + '/1-'
 
         if not os.path.exists(savepath):
             os.makedirs(savepath)
 
         pymultinest.run(
-            self.multinest_loglike,
-            self.multinest_prior_transform,
-            self.free_nparams,
+            LogLikelihood=self.multinest_safe_calc_loglike,
+            Prior=self.multinest_safe_prior_transform,
+            n_dims=self.free_nparams,
             resume=resume,
-            verbose=True,
+            verbose=verbose,
             n_live_points=nlive,
-            outputfiles_basename=self.prefix,
-            sampling_efficiency=0.8,
-            importance_nested_sampling=True,
-            multimodal=True,
+            outputfiles_basename=savepath_prefix,
+            sampling_efficiency=0.3,
+            importance_nested_sampling=ins,
+            multimodal=False,
+            max_iter=max_iter,
+            seed=-1 if random_seed is None else int(random_seed),
         )
 
-        self.Analyzer = pymultinest.Analyzer(
-            outputfiles_basename=self.prefix, n_params=self.free_nparams
+        capped = False
+        if os.path.exists(savepath_prefix + 'ev.dat'):
+            with open(savepath_prefix + 'ev.dat') as f:
+                niter = sum(1 for _ in f)
+            if niter >= max_iter:
+                capped = True
+                msg = (
+                    f'MultiNest stopped at the max_iter cap ({max_iter} iterations) '
+                    'without reaching the evidence tolerance: the posterior and '
+                    'evidence are unreliable. Check for likelihood plateaus or overly '
+                    'wide priors, or rerun with a larger max_iter.'
+                )
+                warnings.warn(msg, stacklevel=2)
+                with open(savepath_prefix + 'max_iter_warning.txt', 'w') as f:
+                    f.write(msg + '\n')
+
+        multinest_analyzer = pymultinest.Analyzer(
+            outputfiles_basename=savepath_prefix, n_params=self.free_nparams
         )
 
-        self.posterior_stats = self.Analyzer.get_stats()
-        self.posterior_sample = self.Analyzer.get_equal_weighted_posterior()
+        try:
+            posterior_stats = multinest_analyzer.get_stats()
+        except ValueError as e:
+            # get_stats() chokes when INS writes a subnormal evidence without an
+            # exponent marker (e.g. ``0.19...-322``) into stats.dat: a sign the INS
+            # evidence is garbage from a posterior pinned to a prior boundary. The
+            # plain NS evidence is on a separate, well-formed line, so recover that
+            # and carry on rather than failing the whole run.
+            posterior_stats = None
+            self.logevidence = self._read_ns_global_evidence(savepath_prefix + 'stats.dat')
+            if self.logevidence is None:
+                raise RuntimeError(
+                    f'pymultinest could not parse the MultiNest stats file ({e}), and '
+                    f'the plain nested-sampling evidence was also unreadable. This '
+                    f'usually means the run did not converge and the posterior '
+                    f'collapsed onto a prior boundary. '
+                    + (f'The max_iter cap ({max_iter}) was also hit. ' if capped else '')
+                    + 'Inspect the model and priors for this dataset.'
+                ) from e
+            warnings.warn(
+                'INS evidence in stats.dat was unparseable (likely a boundary-pinned, '
+                'non-converged posterior); falling back to the plain nested-sampling '
+                'log-evidence.',
+                stacklevel=2,
+            )
+        else:
+            ins_logevidence = posterior_stats.get('nested importance sampling global log-evidence')
+            if ins and ins_logevidence is not None and np.isfinite(ins_logevidence):
+                self.logevidence = ins_logevidence
+            else:
+                self.logevidence = posterior_stats['nested sampling global log-evidence']
 
-        self.posterior_sample[:, -1] = self.posterior_sample[:, -1] + self._logprior_sample(
-            self.posterior_sample[:, 0:-1]
-        )
+        if (not resume) or (not os.path.exists(savepath_prefix + 'posterior_sample.txt')):
+            self.posterior_sample = multinest_analyzer.get_equal_weighted_posterior()
+            self.posterior_sample[:, -1] = self.posterior_sample[:, -1] + self.calc_logprior_sample(
+                self.posterior_sample[:, 0:-1]
+            )
+            np.savetxt(savepath_prefix + 'posterior_sample.txt', self.posterior_sample)
+        else:
+            self.posterior_sample = np.loadtxt(savepath_prefix + 'posterior_sample.txt')
 
-        self.logevidence = self.posterior_stats['nested importance sampling global log-evidence']
-
-        with open(self.prefix + 'nlive.json', 'w') as f:
-            json.dump(self.nlive, f, indent=4, cls=JsonEncoder)
-        with open(self.prefix + 'log_evidence.json', 'w') as f:
-            json.dump(self.logevidence, f, indent=4, cls=JsonEncoder)
-        with open(self.prefix + 'posterior_stats.json', 'w') as f:
-            json.dump(self.posterior_stats, f, indent=4, cls=JsonEncoder)
+        with open(savepath_prefix + 'nlive.json', 'w') as f:
+            json.dump(nlive, f, indent=4, cls=JsonEncoder)
+        if posterior_stats is not None:
+            with open(savepath_prefix + 'posterior_stats.json', 'w') as f:
+                json.dump(
+                    posterior_stats,
+                    f,
+                    indent=4,
+                    cls=JsonEncoder,
+                )
 
         return Posterior(self)
 
-    def emcee_logprob(self, theta):
-        """emcee-facing log-probability; returns ``-inf`` outside the prior support."""
+    def emcee_calc_logprob(self, theta):
+        """emcee-facing wrapper around :meth:`calc_logprob`."""
 
-        lp = self._logprior(theta)
+        return self.calc_logprob(theta)
 
-        if not np.isfinite(lp):
-            return -np.inf
-        return lp + self._loglike(theta)
-
-    def emcee(self, nstep=1000, discard=100, resume=True, savepath='./'):
-        """Run emcee and return a :class:`~curvefit.infer.posterior.Posterior`.
+    def emcee(self, nstep=1000, discard=100, resume=True, savepath='./', random_seed=None):
+        """Run emcee and return a :class:`Posterior` wrapping the flattened chain.
 
         Args:
             nstep: Number of MCMC steps per walker.
             discard: Burn-in steps discarded before flattening.
             resume: Reuse an existing chain cached under ``savepath``.
             savepath: Directory for chain outputs.
+            random_seed: Seed for reproducible runs. ``None`` (default)
+                lets emcee draw fresh entropy, so different runs differ.
 
         Returns:
-            A :class:`~curvefit.infer.posterior.Posterior`.
+            A :class:`~bayspec.infer.analyzer.Posterior`.
         """
 
         import emcee
 
-        from .posterior import Posterior
+        from .analyzer import Posterior
+
+        self.sampler_type = 'mcmc'
 
         self._you_free()
 
-        self.nstep = nstep
-        self.discard = discard
-        self.resume = resume
-        self.prefix = savepath + '/1-'
+        savepath_prefix = savepath + '/1-'
 
         if not os.path.exists(savepath):
             os.makedirs(savepath)
 
-        np.random.seed(42)
+        rng = np.random.default_rng(random_seed)
         ndim = self.free_nparams
         nwalkers = 32 if 2 * ndim < 32 else 2 * ndim
-        pos = self.free_pvalues + 1e-4 * np.random.randn(nwalkers, ndim)
+        pos = self.free_pvalues + 1e-4 * rng.standard_normal((nwalkers, ndim))
 
-        if (not self.resume) or (not os.path.exists(self.prefix + '.npz')):
-            sampler = emcee.EnsembleSampler(nwalkers, ndim, self.emcee_logprob)
-            sampler.run_mcmc(pos, self.nstep, progress=True)
+        if (not resume) or (not os.path.exists(savepath_prefix + '.npz')):
+            # emcee proposals draw from numpy's global RNG; seed it only on opt-in.
+            if random_seed is not None:
+                np.random.seed(int(random_seed))
+            emcee_sampler = emcee.EnsembleSampler(nwalkers, ndim, self.emcee_calc_logprob)
+            emcee_sampler.run_mcmc(pos, nstep, progress=True)
 
-            self.params_samples = sampler.get_chain()
-            np.savez(self.prefix, samples=self.params_samples)
+            params_sample = emcee_sampler.get_chain()
+            np.savez(savepath_prefix + '.npz', sample=params_sample)
 
-            self.logprob_sample = sampler.get_log_prob()
-            np.savetxt(self.prefix + 'logprob.dat', self.logprob_sample)
+            logprob_sample = emcee_sampler.get_log_prob()
+            np.savetxt(savepath_prefix + 'logprob.dat', logprob_sample)
 
             try:
-                self.autocorr_time = sampler.get_autocorr_time()
-                with open(self.prefix + 'autocorr_time.json', 'w') as f:
-                    json.dump(self.autocorr_time, f, indent=4, cls=JsonEncoder)
+                autocorr_time = emcee_sampler.get_autocorr_time()
+                with open(savepath_prefix + 'autocorr_time.json', 'w') as f:
+                    json.dump(
+                        autocorr_time,
+                        f,
+                        indent=4,
+                        cls=JsonEncoder,
+                    )
             except Exception:
                 pass
 
-        self.params_samples = np.load(self.prefix + '.npz')['samples']
-        self.logprob_sample = np.loadtxt(self.prefix + 'logprob.dat')
+        params_sample = np.load(savepath_prefix + '.npz')['sample']
+        logprob_sample = np.loadtxt(savepath_prefix + 'logprob.dat')
 
-        flat_params_sample = self.params_samples[self.discard :, :, :].reshape(-1, ndim)
-        flat_logprob_sample = self.logprob_sample[self.discard :, :].reshape(-1)
+        flat_params_sample = params_sample[discard:, :, :].reshape(-1, ndim)
+        flat_logprob_sample = logprob_sample[discard:, :].reshape(-1)
 
         self.posterior_sample = np.hstack(
             (flat_params_sample, np.reshape(flat_logprob_sample, (-1, 1)))
         )
 
-        np.savetxt(self.prefix + 'post_equal_weights.dat', self.posterior_sample)
-        with open(self.prefix + 'nstep.json', 'w') as f:
-            json.dump(self.nstep, f, indent=4, cls=JsonEncoder)
-        with open(self.prefix + 'discard.json', 'w') as f:
-            json.dump(self.discard, f, indent=4, cls=JsonEncoder)
+        np.savetxt(savepath_prefix + 'posterior_sample.txt', self.posterior_sample)
+        with open(savepath_prefix + 'nstep.json', 'w') as f:
+            json.dump(nstep, f, indent=4, cls=JsonEncoder)
+        with open(savepath_prefix + 'discard.json', 'w') as f:
+            json.dump(discard, f, indent=4, cls=JsonEncoder)
 
         return Posterior(self)
-
-    def minimize(self, method='Nelder-Mead'):
-        """Minimise ``-2 * log-likelihood`` with a scipy optimizer and return best-fit values.
-
-        Args:
-            method: Scipy ``minimize`` method name. Supported options include
-                ``'Nelder-Mead'``, ``'TNC'``, ``'SLSQP'``, ``'Powell'``,
-                ``'trust-constr'``, and ``'L-BFGS-B'``.
-
-        Returns:
-            Array of best-fit free-parameter values.
-        """
-
-        np.random.seed(42)
-
-        def nll(*args):
-            return -2 * self._loglike(*args)
-
-        pos = self.free_pvalues + 1e-4 * np.random.randn(self.free_nparams)
-        soln = minimize(nll, pos, method=method, bounds=self.free_pranges)
-
-        return soln.x
-
-
-class BayesInfer(Infer):
-    """:class:`Infer` alias for Bayesian inference workflows.
-
-    Inherits all MultiNest and emcee driver methods from :class:`Infer`
-    without modification; exists as a distinct class for type-checking
-    and display labelling.
-    """
-
-    pass
 
 
 class MaxLikeFit(Infer):
     """:class:`Infer` extension for maximum-likelihood fits with bootstrap sampling.
 
-    Provides :meth:`lmfit` (least-squares on the pseudo-residuals; only for
-    pure chi-square statistics) and :meth:`iminuit` (scalar minimisation of
-    the fit statistic; valid for every statistic). Both run the minimiser,
-    build a covariance-driven bootstrap sample, and return a
-    :class:`~curvefit.infer.posterior.Bootstrap`.
+    Provides :meth:`lmfit` and :meth:`iminuit` drivers. Both run the
+    minimiser, cache the best fit, build a covariance-driven bootstrap
+    sample respecting the free-parameter ranges, and return a
+    :class:`Bootstrap` for downstream analysis.
     """
 
     def __init__(self, pairs=None):
         """Initialise like :class:`Infer` and tag the inference type."""
-
         super().__init__(pairs=pairs)
 
         self.inference_type = 'Maximum Likelihood Estimation'
@@ -877,13 +1136,14 @@ class MaxLikeFit(Infer):
         """Draw a covariance-respecting bootstrap sample and score each draw.
 
         Falls back to a diagonal covariance built from ``errors`` when
-        ``covar`` is missing or non-finite. Draws outside any free
-        parameter's range are rejected. The first row is the best fit.
+        ``covar`` is missing or non-finite. Draws are rejected if they
+        fall outside any free parameter's range.
 
         Args:
             values: Best-fit free-parameter vector.
             covar: Optional parameter covariance matrix.
-            errors: Optional per-parameter uncertainties for the fallback.
+            errors: Optional per-parameter uncertainties, used for the
+                fallback diagonal covariance.
             nsample: Target number of valid draws.
             random_seed: Seed for reproducibility.
         """
@@ -944,7 +1204,7 @@ class MaxLikeFit(Infer):
 
     @staticmethod
     def _display_results(*objects):
-        """Render each object with IPython when available, else ``print`` it."""
+        """Render each object with IPython when available, otherwise ``print`` it."""
 
         valid_objects = [obj for obj in objects if obj is not None]
 
@@ -969,8 +1229,8 @@ class MaxLikeFit(Infer):
 
         from .statistic import LMFIT_SAFE_STATS
 
-        stats = [s for data in self.Data for s in data.stats]
-        bad = sorted({s for s in stats if s not in LMFIT_SAFE_STATS})
+        stats = [stat for data in self.Data for stat in data.stats]
+        bad = sorted({stat for stat in stats if stat not in LMFIT_SAFE_STATS})
         if bad:
             msg = (
                 f'lmfit (least-squares) supports only {sorted(LMFIT_SAFE_STATS)}; '
@@ -981,7 +1241,7 @@ class MaxLikeFit(Infer):
     def lmfit_residual(self, params):
         """lmfit-facing residual callback; delegates to :meth:`calc_pseudo_residual`."""
 
-        theta = [params[pl].value for pl in self.clean_free_plabels]
+        theta = [params[pl] for pl in self.clean_free_plabels]
 
         return self.calc_pseudo_residual(theta)
 
@@ -989,19 +1249,16 @@ class MaxLikeFit(Infer):
         """Run ``lmfit.minimize`` on the pseudo-residuals and bootstrap the result.
 
         Args:
-            savepath: Optional directory for persisted bootstrap samples and
-                summary JSON; ``None`` skips disk IO.
+            savepath: Optional directory for persisted bootstrap samples
+                and summary JSON; pass ``None`` to skip disk IO.
 
         Returns:
-            A :class:`~curvefit.infer.posterior.Bootstrap`.
-
-        Raises:
-            ValueError: If any unit uses a non-lmfit-safe statistic.
+            A :class:`~bayspec.infer.analyzer.Bootstrap`.
         """
 
         import lmfit
 
-        from .posterior import Bootstrap
+        from .analyzer import Bootstrap
 
         self._you_free()
         self._check_lmfit_safe()
@@ -1031,18 +1288,21 @@ class MaxLikeFit(Infer):
         maxlike_res = {'values': values, 'errors': errors, 'covar': covar}
 
         if savepath is not None:
-            if not os.path.exists(savepath):
-                os.makedirs(savepath)
             savepath_prefix = savepath + '/1-'
 
             np.savetxt(savepath_prefix + 'bootstrap_sample.txt', self.bootstrap_sample)
             with open(savepath_prefix + 'maxlike_res.json', 'w') as f:
-                json.dump(maxlike_res, f, indent=4, cls=JsonEncoder)
+                json.dump(
+                    maxlike_res,
+                    f,
+                    indent=4,
+                    cls=JsonEncoder,
+                )
 
         return Bootstrap(self)
 
     def iminuit_cost(self, *theta):
-        """iminuit-facing cost; returns ``1e100`` when the statistic is non-finite."""
+        """iminuit-facing cost function; returns ``1e100`` when the stat is non-finite."""
 
         cost = self.calc_stat(theta)
 
@@ -1055,16 +1315,16 @@ class MaxLikeFit(Infer):
         """Run iminuit's ``migrad`` + ``hesse`` + ``minos`` and bootstrap the result.
 
         Args:
-            savepath: Optional directory for persisted bootstrap samples and
-                summary JSON.
+            savepath: Optional directory for persisted bootstrap samples
+                and summary JSON.
 
         Returns:
-            A :class:`~curvefit.infer.posterior.Bootstrap`.
+            A :class:`~bayspec.infer.analyzer.Bootstrap`.
         """
 
         import iminuit
 
-        from .posterior import Bootstrap
+        from .analyzer import Bootstrap
 
         self._you_free()
 
@@ -1098,12 +1358,15 @@ class MaxLikeFit(Infer):
         }
 
         if savepath is not None:
-            if not os.path.exists(savepath):
-                os.makedirs(savepath)
             savepath_prefix = savepath + '/1-'
 
             np.savetxt(savepath_prefix + 'bootstrap_sample.txt', self.bootstrap_sample)
             with open(savepath_prefix + 'maxlike_res.json', 'w') as f:
-                json.dump(maxlike_res, f, indent=4, cls=JsonEncoder)
+                json.dump(
+                    maxlike_res,
+                    f,
+                    indent=4,
+                    cls=JsonEncoder,
+                )
 
         return Bootstrap(self)

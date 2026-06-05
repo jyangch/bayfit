@@ -1,7 +1,7 @@
 """Container types for generic curve-fitting data.
 
 A :class:`DataUnit` bundles one set of curve data -- x/y values, optional
-x/y errors, per-point weights, upper-limit flags, and a statistic choice --
+x/y errors, a per-unit weight, upper-limit flags, and a statistic choice --
 into a single unit. Errors are normalised to a ``(2, npoint)`` array of
 ``[low, high]`` rows regardless of whether the caller supplies a scalar,
 a symmetric 1-D array, or explicit asymmetric columns.  A :class:`Data`
@@ -13,9 +13,12 @@ the inference layer consumes.
 from collections import OrderedDict
 import inspect
 import json
+import os
 
 import numpy as np
 import pandas as pd
+
+from curvefit.util.tools import json_dump
 
 from ..util.info import Info
 
@@ -29,7 +32,7 @@ class Data:
 
     Attributes:
         data: ``OrderedDict`` mapping names to :class:`DataUnit` instances.
-        exprs: Ordered list of registered names.
+        names: Ordered list of registered data-unit names.
         stats: Per-unit statistic strings in insertion order.
         npoints: Integer array of per-unit point counts.
     """
@@ -70,13 +73,13 @@ class Data:
                 if isinstance(item, tuple):
                     self._setitem(*item)
 
-            self._extract()
+            self._update()
 
         elif isinstance(new_data, dict):
             for item in new_data.items():
                 self._setitem(*item)
 
-            self._extract()
+            self._update()
 
         else:
             raise ValueError('unsupported data type')
@@ -89,26 +92,14 @@ class Data:
         value.name = key
         self._data[key] = value
 
-    def _extract(self):
+    def _update(self):
 
         if self.data is None:
             raise ValueError('data is None')
 
-        self.exprs = [key for key in self.data]
+        self.names = [key for key in self.data]
         self.stats = [unit.stat for unit in self.data.values()]
         self.npoints = np.array([unit.npoint for unit in self.data.values()])
-
-    @property
-    def expr(self):
-        """Best-effort identifier for this container inferred from caller scope."""
-
-        return self.get_obj_name() or 'data'
-
-    @property
-    def pdicts(self):
-        """Empty ``OrderedDict`` placeholder for parameter-dictionary compatibility."""
-
-        return OrderedDict()
 
     @property
     def info(self):
@@ -118,9 +109,21 @@ class Data:
         info_dict['Name'] = [key for key in self.data]
         info_dict['Npoint'] = [unit.npoint for unit in self.data.values()]
         info_dict['Statistic'] = [unit.stat for unit in self.data.values()]
-        info_dict['Upperlimit'] = [int(np.sum(unit.up)) for unit in self.data.values()]
+        info_dict['Weight'] = [unit.weight for unit in self.data.values()]
 
         return Info.from_dict(info_dict)
+
+    def save(self, savepath):
+        """Dump the per-unit info table to ``<savepath>/data.json``.
+
+        Args:
+            savepath: Directory path. Created if missing.
+        """
+
+        if not os.path.exists(savepath):
+            os.makedirs(savepath)
+
+        json_dump(self.info.data_list_dict, savepath + '/data.json')
 
     @property
     def fit_with(self):
@@ -158,6 +161,54 @@ class Data:
             if self._fit_with.fit_to != self:
                 self._fit_with.fit_to = self
 
+    @property
+    def xs(self):
+        """Per-unit ``x`` arrays (``float64`` by construction)."""
+
+        return [unit.xs for unit in self.data.values()]
+
+    @property
+    def ys(self):
+        """Per-unit ``y`` arrays (``float64`` by construction) for the kernels."""
+
+        return [unit.ys for unit in self.data.values()]
+
+    @property
+    def xerr(self):
+        """Per-unit ``(2, n)`` x-error arrays (``float64`` by construction)."""
+
+        return [unit.xerr for unit in self.data.values()]
+
+    @property
+    def yerr(self):
+        """Per-unit ``(2, n)`` y-error arrays (``float64`` by construction)."""
+
+        return [unit.yerr for unit in self.data.values()]
+
+    @property
+    def weights(self):
+        """Per-unit scalar weights as a ``float64`` array (one per data unit)."""
+
+        return np.array([unit.weight for unit in self.data.values()], dtype=float)
+
+    @property
+    def ups(self):
+        """Per-unit upper-limit boolean masks."""
+
+        return [unit.ups for unit in self.data.values()]
+
+    @property
+    def los(self):
+        """Per-unit lower-limit boolean masks."""
+
+        return [unit.los for unit in self.data.values()]
+
+    @property
+    def expr(self):
+        """Best-effort identifier for this container inferred from caller scope."""
+
+        return self.get_obj_name()
+
     def get_obj_name(self):
         """Walk call frames and return the outermost local name bound to ``self``.
 
@@ -189,13 +240,13 @@ class Data:
         """Register ``value`` under ``key`` and re-run aggregate extraction."""
 
         self._setitem(key, value)
-        self._extract()
+        self._update()
 
     def __delitem__(self, key):
         """Remove the entry under ``key`` and re-run aggregate extraction."""
 
         del self._data[key]
-        self._extract()
+        self._update()
 
     def __contains__(self, key):
         """Return ``True`` when ``key`` is registered in this container."""
@@ -204,9 +255,21 @@ class Data:
 
     def __str__(self):
 
-        print(self.info.table)
+        return f'*** Data ***\n{self.info.text_table}\n'
 
-        return ''
+    def __repr__(self):
+
+        return self.__str__()
+
+    def _repr_html_(self):
+
+        return (
+            f'{self.info.html_style}'
+            f'<details open>'
+            f'<summary style="margin-bottom: 10px;"><b>Data</b></summary>'
+            f'{self.info.html_table}'
+            f'</details>'
+        )
 
 
 class DataUnit:
@@ -217,8 +280,8 @@ class DataUnit:
     with rows ``[low, high]``; a scalar or ``None`` produces a uniform
     array, a 1-D array is broadcast symmetrically, and a 2-D array is
     accepted in either ``(2, npoint)`` or ``(npoint, 2)`` orientation.
-    Per-point weights default to ``1`` and upper-limit flags default to
-    ``False``.
+    The per-unit weight defaults to ``1`` and upper-/lower-limit flags
+    default to ``False``.
 
     Attributes:
         x: Independent-variable values, shape ``(npoint,)``.
@@ -226,49 +289,50 @@ class DataUnit:
         npoint: Number of data points.
         xerr: X error array, shape ``(2, npoint)``, rows are ``[low, high]``.
         yerr: Y error array, shape ``(2, npoint)``, rows are ``[low, high]``.
-        weight: Per-point fit weights, shape ``(npoint,)``.
+        weight: Per-unit scalar fit weight.
         up: Boolean upper-limit mask, shape ``(npoint,)``.
-        stat: Statistic identifier string (e.g. ``'chi^2'``).
+        lo: Boolean lower-limit mask, shape ``(npoint,)``.
+        stat: Statistic identifier string (e.g. ``'chi2'``).
     """
 
-    def __init__(self, x, y, xerr=None, yerr=None, weight=1, up=None, stat='chi^2', name=None):
+    def __init__(self, xs, ys, yerr, xerr=None, ups=None, los=None, stat='chi2', weight=1.0):
         """Initialise a data unit and normalise all error and weight arrays.
 
         Args:
             x: Independent-variable values; any array-like of length ``n``.
             y: Dependent-variable values; any array-like of length ``n``.
-            xerr: X errors; ``None``, scalar, 1-D array of length ``n``, or
-                2-D array of shape ``(2, n)`` or ``(n, 2)``.  ``None``
-                defaults to ``0``.
-            yerr: Y errors; same shapes as ``xerr``.  ``None`` defaults to
-                ``1``.
-            weight: Per-point fit weight; scalar or array of length ``n``.
+            yerr: Y errors; required.  Scalar, 1-D array of length ``n``, or
+                2-D array of shape ``(2, n)`` or ``(n, 2)``.  For an
+                unweighted (OLS) fit pass an explicit constant such as ``1``.
+            xerr: X errors; same shapes as ``yerr``.  ``None`` defaults to
+                ``0`` (no x uncertainty).
+            weight: Per-unit scalar fit weight for this whole dataset.
                 Defaults to ``1``.
             up: Boolean upper-limit flag per point; array of length ``n``
                 or ``None`` (all ``False``).
+            lo: Boolean lower-limit flag per point; array of length ``n``
+                or ``None`` (all ``False``).
             stat: Statistic string used during fitting.  Defaults to
-                ``'chi^2'``.
-            name: Optional label for this unit.
+                ``'chi2'``.
 
         Raises:
-            ValueError: If any error, weight, or upper-limit array length
-                does not match the data, or an error has an unsupported shape.
+            ValueError: If ``yerr`` is ``None``, if any error, weight, or
+                limit array length does not match the data, or an error has
+                an unsupported shape.
         """
 
-        self.x = np.asarray(x, dtype=float)
-        self.y = np.asarray(y, dtype=float)
-        self.npoint = self.x.shape[0]
+        self.xs = np.asarray(xs, dtype=float)
+        self.ys = np.asarray(ys, dtype=float)
+        self.npoint = self.xs.shape[0]
 
         self.xerr = self._normalize_err(xerr, default=0.0)
         self.yerr = self._normalize_err(yerr, default=1.0)
-        self.weight = self._normalize_weight(weight)
-        self.up = self._normalize_up(up)
+        self.ups = self._normalize_mask(ups, 'up')
+        self.los = self._normalize_mask(los, 'lo')
         self.stat = stat
+        self.weight = float(weight)
 
-        if name is not None:
-            self.name = name
-
-    def _normalize_err(self, err, default):
+    def _normalize_err(self, err, default=0.0):
 
         n = self.npoint
 
@@ -296,85 +360,78 @@ class DataUnit:
 
         raise ValueError('unsupported error shape')
 
-    def _normalize_weight(self, weight):
+    def _normalize_mask(self, mask, label):
 
         n = self.npoint
 
-        if np.isscalar(weight):
-            return np.full(n, float(weight))
-
-        weight = np.asarray(weight, dtype=float)
-
-        if weight.ndim == 0:
-            return np.full(n, float(weight))
-
-        if weight.shape[0] != n:
-            raise ValueError('weight length does not match data')
-
-        return weight
-
-    def _normalize_up(self, up):
-
-        n = self.npoint
-
-        if up is None:
+        if mask is None:
             return np.zeros(n, dtype=bool)
 
-        up = np.asarray(up, dtype=bool)
-        if up.shape[0] != n:
-            raise ValueError('up length does not match data')
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape[0] != n:
+            raise ValueError(f'{label} length does not match data')
 
-        return up
+        return mask
 
     @classmethod
-    def from_dict(cls, d, **kwargs):
+    def from_dict(
+        cls,
+        dict,
+        xs='xs',
+        ys='ys',
+        xerr='xerr',
+        yerr='yerr',
+        ups='ups',
+        los='los',
+        stat='stat',
+        weight='weight',
+    ):
         """Construct a :class:`DataUnit` from a plain dictionary.
 
-        Recognised keys are ``'x'``, ``'y'``, ``'xerr'``, ``'yerr'``,
-        ``'weight'``, ``'up'``, ``'stat'``, and ``'name'``; all except
-        ``'x'`` and ``'y'`` are optional and fall back to the
-        :class:`DataUnit` defaults.  Extra keyword arguments are forwarded
+        Recognised keys are ``'xs'``, ``'ys'``, ``'yerr'``, ``'xerr'``,
+        ``'weight'``, ``'ups'``, ``'los'``, ``'stat'``, and ``'name'``; all
+        except ``'xs'``, ``'ys'``, and ``'yerr'`` are optional and fall back to
+        the :class:`DataUnit` defaults.  Extra keyword arguments are forwarded
         to the constructor.
 
         Args:
-            d: Mapping with at least ``'x'`` and ``'y'`` keys.
+            d: Mapping with at least ``'xs'``, ``'ys'``, and ``'yerr'`` keys.
             **kwargs: Additional keyword arguments passed to ``__init__``.
 
         Raises:
-            KeyError: If ``d`` is missing ``'x'`` or ``'y'``.
+            KeyError: If ``d`` is missing ``'xs'``, ``'ys'``, or ``'yerr'``.
 
         Example:
-            >>> du = DataUnit.from_dict({'x': [1, 2], 'y': [3, 4], 'yerr': [0.1, 0.2]})
+            >>> du = DataUnit.from_dict({'xs': [1, 2], 'ys': [3, 4], 'yerr': [0.1, 0.2]})
         """
 
         return cls(
-            d['x'],
-            d['y'],
-            xerr=d.get('xerr'),
-            yerr=d.get('yerr'),
-            weight=d.get('weight', 1),
-            up=d.get('up'),
-            stat=d.get('stat', 'chi^2'),
-            name=d.get('name'),
-            **kwargs,
+            dict[xs],
+            dict[ys],
+            yerr=dict[yerr],
+            xerr=dict.get(xerr),
+            ups=dict.get(ups),
+            los=dict.get(los),
+            stat=dict.get(stat, 'chi2'),
+            weight=dict.get(weight, 1),
         )
 
     @classmethod
     def from_dataframe(
         cls,
         df,
-        x='x',
-        y='y',
-        xerr=None,
-        yerr=None,
-        xerr_low=None,
-        xerr_high=None,
-        yerr_low=None,
-        yerr_high=None,
-        weight=None,
-        up=None,
-        stat='chi^2',
-        name=None,
+        xs='xs',
+        ys='ys',
+        xerr='xerr',
+        yerr='yerr',
+        xerr_low='xerr_low',
+        xerr_high='xerr_high',
+        yerr_low='yerr_low',
+        yerr_high='yerr_high',
+        ups='ups',
+        los='los',
+        stat='chi2',
+        weight=1.0,
     ):
         """Construct a :class:`DataUnit` from a ``pandas`` ``DataFrame``.
 
@@ -400,11 +457,13 @@ class DataUnit:
             xerr_high: Column name for the high x error bound, or ``None``.
             yerr_low: Column name for the low y error bound, or ``None``.
             yerr_high: Column name for the high y error bound, or ``None``.
-            weight: Column name for per-point weights, or ``None`` (uses
-                ``1`` for all points).
+            weight: Per-unit scalar weight for this whole dataset.  Defaults
+                to ``1``.
             up: Column name for the boolean upper-limit mask, or ``None``
                 (all ``False``).
-            stat: Statistic identifier.  Defaults to ``'chi^2'``.
+            lo: Column name for the boolean lower-limit mask, or ``None``
+                (all ``False``).
+            stat: Statistic identifier.  Defaults to ``'chi2'``.
             name: Optional label for the constructed unit.
 
         Raises:
@@ -417,33 +476,29 @@ class DataUnit:
             >>> du_asym = DataUnit.from_dataframe(df, yerr_low='yerr', yerr_high='yerr')
         """
 
-        def col(c):
-            return None if c is None else np.asarray(df[c], dtype=float)
+        def col(c, dtype=float):
+            return None if c not in df.columns else np.asarray(df[c], dtype=dtype)
 
-        # auto-detect standard column names when not explicitly specified
-        if xerr is None and xerr_low is None and xerr_high is None and 'xerr' in df.columns:
-            xerr = 'xerr'
-        if yerr is None and yerr_low is None and yerr_high is None and 'yerr' in df.columns:
-            yerr = 'yerr'
+        def err_col(sym, low, high):
+            if low is not None and high is not None:
+                return np.vstack([low, high])
+            if sym is not None:
+                return sym
+            return None
 
-        xe = cls._cols_to_err(col(xerr), col(xerr_low), col(xerr_high))
-        ye = cls._cols_to_err(col(yerr), col(yerr_low), col(yerr_high))
-        w = 1 if weight is None else np.asarray(df[weight], dtype=float)
-        u = None if up is None else np.asarray(df[up], dtype=bool)
-
-        return cls(col(x), col(y), xerr=xe, yerr=ye, weight=w, up=u, stat=stat, name=name)
-
-    @staticmethod
-    def _cols_to_err(sym, low, high):
-
-        if low is not None and high is not None:
-            return np.vstack([low, high])
-        if sym is not None:
-            return sym
-        return None
+        return cls(
+            col(xs),
+            col(ys),
+            yerr=err_col(col(yerr), col(yerr_low), col(yerr_high)),
+            xerr=err_col(col(xerr), col(xerr_low), col(xerr_high)),
+            ups=col(ups, dtype=bool),
+            los=col(los, dtype=bool),
+            stat=stat,
+            weight=weight,
+        )
 
     @classmethod
-    def from_json(cls, path, **kwargs):
+    def from_json(cls, path):
         """Construct a :class:`DataUnit` by reading a JSON file.
 
         The file must contain a JSON object with at least ``'x'`` and
@@ -462,12 +517,12 @@ class DataUnit:
         """
 
         with open(path) as f:
-            d = json.load(f)
+            dict = json.load(f)
 
-        return cls.from_dict(d, **kwargs)
+        return cls.from_dict(dict)
 
     @classmethod
-    def from_csv(cls, path, **kwargs):
+    def from_csv(cls, path):
         """Construct a :class:`DataUnit` by reading a CSV file.
 
         Column discovery follows the same rules as :meth:`from_dataframe`:
@@ -477,8 +532,6 @@ class DataUnit:
 
         Args:
             path: Path to the CSV file.
-            **kwargs: Additional keyword arguments forwarded to
-                :meth:`from_dataframe`.
 
         Raises:
             FileNotFoundError: If ``path`` does not exist.
@@ -487,7 +540,34 @@ class DataUnit:
 
         df = pd.read_csv(path)
 
-        return cls.from_dataframe(df, **kwargs)
+        return cls.from_dataframe(df)
+
+    @property
+    def info(self):
+        """Tabular :class:`Info` view of the unit's point count, statistic, and limit counts."""
+
+        info_dict = OrderedDict()
+        info_dict['npoint'] = self.npoint
+        info_dict['stat'] = self.stat
+        info_dict['weight'] = self.weight
+
+        info_dict = OrderedDict(
+            [('property', list(info_dict.keys())), (self.name, list(info_dict.values()))]
+        )
+
+        return Info.from_dict(info_dict)
+
+    def save(self, savepath):
+        """Dump the unit's info table to ``<savepath>/dataunit.json``.
+
+        Args:
+            savepath: Directory path. Created if missing.
+        """
+
+        if not os.path.exists(savepath):
+            os.makedirs(savepath)
+
+        json_dump(self.info.data_list_dict, savepath + '/dataunit.json')
 
     @property
     def name(self):
@@ -502,21 +582,6 @@ class DataUnit:
     def name(self, new_name):
 
         self._name = new_name
-
-    @property
-    def info(self):
-        """Tabular :class:`Info` view of the unit's point count, statistic, and upper-limit count."""
-
-        info_dict = OrderedDict()
-        info_dict['npoint'] = self.npoint
-        info_dict['stat'] = self.stat
-        info_dict['upperlimit'] = int(np.sum(self.up))
-
-        info_dict = OrderedDict(
-            [('property', list(info_dict.keys())), (self.name, list(info_dict.values()))]
-        )
-
-        return Info.from_dict(info_dict)
 
     def get_obj_name(self):
         """Walk call frames and return the outermost local name bound to ``self``.
@@ -542,6 +607,18 @@ class DataUnit:
 
     def __str__(self):
 
-        print(self.info.table)
+        return f'*** DataUnit ***\n{self.info.text_table}'
 
-        return ''
+    def __repr__(self):
+
+        return self.__str__()
+
+    def _repr_html_(self):
+
+        return (
+            f'{self.info.html_style}'
+            f'<details open>'
+            f'<summary style="margin-bottom: 10px;"><b>DataUnit</b></summary>'
+            f'{self.info.html_table}'
+            f'</details>'
+        )

@@ -6,7 +6,7 @@ from curvefit.model import local
 # Each model is built, every parameter set to val = 0.3 + 0.17 * j (j = param index),
 # then evaluated on X = linspace(1, 9, 7)[:, None].
 GOLDEN = {
-    'ln': [0.77, 1.17, 1.57, 1.97, 2.37, 2.77, 3.17],
+    'line': [0.77, 1.17, 1.57, 1.97, 2.37, 2.77, 3.17],
     'pl': [2.951209, 3.805336, 4.357942, 4.782897, 5.1344, 5.437283, 5.705225],
     'expd': [0.105281, 0.001236, 1.5e-05, 0.0, 0.0, 0.0, 0.0],
     'bln1': [0.77, 1.17, 1.57, 1.97, 2.37, 2.77, 3.17],

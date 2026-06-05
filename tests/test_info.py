@@ -1,6 +1,6 @@
 import pytest
 
-from curvefit.model.local import ln
+from curvefit.model.local import line
 from curvefit.util.info import Info
 
 
@@ -12,6 +12,6 @@ def test_from_list_dict_empty_raises():
 
 def test_model_str_does_not_crash():
     # Model __str__ renders a rich summary string without raising.
-    m = ln()
+    m = line()
     s = str(m)
     assert isinstance(s, str) and s != ''

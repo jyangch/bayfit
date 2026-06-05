@@ -2,15 +2,15 @@ import numpy as np
 
 from curvefit.data.data import Data, DataUnit
 from curvefit.infer.infer import Infer
-from curvefit.model.local import ln
+from curvefit.model.local import line
 
 
 def _make_infer():
     x = np.array([0.0, 1.0, 2.0, 3.0])
     y = 2.0 * x + 1.0
-    unit = DataUnit(x, y, yerr=np.full(4, 0.1), stat='chi^2')
+    unit = DataUnit(x, y, yerr=np.full(4, 0.1), stat='chi2')
     data = Data([('d', unit)])
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
     return Infer([(data, model)]), data, model
 
@@ -32,10 +32,29 @@ def test_calc_loglike_best_at_truth():
 
 def test_generic_data_properties():
     infer, _data, _model = _make_infer()
-    assert np.allclose(infer.data_x[0], [0, 1, 2, 3])
-    assert np.allclose(infer.data_y[0], [1, 3, 5, 7])
+    assert np.allclose(infer.data_xs[0], [0, 1, 2, 3])
+    assert np.allclose(infer.data_ys[0], [1, 3, 5, 7])
     infer.at_par([2.0, 1.0])
-    assert np.allclose(infer.model_y[0], [1, 3, 5, 7])
+    assert np.allclose(infer.model_ys[0], [1, 3, 5, 7])
+
+
+def test_data_up_and_lo_aggregated():
+    x = np.array([0.0, 1.0, 2.0, 3.0])
+    y = 2.0 * x + 1.0
+    unit = DataUnit(
+        x,
+        y,
+        yerr=np.full(4, 0.1),
+        up=[True, False, False, False],
+        lo=[False, False, False, True],
+        stat='chi2',
+    )
+    data = Data([('d', unit)])
+    model = line()
+    model.params['logv'].frozen = True
+    infer = Infer([(data, model)])
+    assert list(infer.data_ups[0]) == [True, False, False, False]
+    assert list(infer.data_los[0]) == [False, False, False, True]
 
 
 def test_calc_stat_pseudo_residual_and_clean_labels():
@@ -43,13 +62,13 @@ def test_calc_stat_pseudo_residual_and_clean_labels():
 
     from curvefit.data.data import Data, DataUnit
     from curvefit.infer.infer import Infer
-    from curvefit.model.local import ln
+    from curvefit.model.local import line
 
     x = np.array([0.0, 1.0, 2.0, 3.0])
     y = 2.0 * x + 1.0
-    unit = DataUnit(x, y, yerr=np.full(4, 0.1), stat='chi^2')
+    unit = DataUnit(x, y, yerr=np.full(4, 0.1), stat='chi2')
     data = Data([('d', unit)])
-    model = ln()
+    model = line()
     model.params['logv'].frozen = True
     infer = Infer([(data, model)])
 

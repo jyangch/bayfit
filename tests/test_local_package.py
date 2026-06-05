@@ -1,12 +1,12 @@
 import numpy as np
 
-from curvefit.model.local import const, expcut, list_local_models, ln, pl
+from curvefit.model.local import const, expcut, line, list_local_models, pl
 
 
 def test_all_models_registered():
     names = set(list_local_models())
     expected = {
-        'ln',
+        'line',
         'pl',
         'expd',
         'bln',
@@ -40,5 +40,5 @@ def test_expcut_is_unit_at_zero_and_decreasing():
 
 
 def test_existing_models_are_additive():
-    assert ln().type == 'add'
+    assert line().type == 'add'
     assert pl().type == 'add'
