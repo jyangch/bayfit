@@ -1,6 +1,6 @@
 import numpy as np
 
-from curvefit.model.local import line, pl
+from bayfit.model.local import line, pl
 
 
 def test_single_model_eval():

@@ -5,7 +5,7 @@ that the inference layer can query pdf, cdf, quantiles, and moments
 without caring about the underlying distribution family.
 
 Example:
-    from curvefit.util.prior import unif, norm
+    from bayfit.util.prior import unif, norm
     p = unif(0.0, 1.0)
     p.pdf(0.5)
 """

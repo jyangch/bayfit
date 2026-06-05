@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from curvefit.data.data import Data, DataUnit
+from bayfit.data.data import Data, DataUnit
 
 
 def test_defaults_and_shapes():

@@ -1,8 +1,8 @@
 import numpy as np
 
-from curvefit.data.data import Data, DataUnit
-from curvefit.infer.infer import Infer
-from curvefit.model.local import line
+from bayfit.data.data import Data, DataUnit
+from bayfit.infer.infer import Infer
+from bayfit.model.local import line
 
 
 def _make_infer():
@@ -60,9 +60,9 @@ def test_data_up_and_lo_aggregated():
 def test_calc_stat_pseudo_residual_and_clean_labels():
     import numpy as np
 
-    from curvefit.data.data import Data, DataUnit
-    from curvefit.infer.infer import Infer
-    from curvefit.model.local import line
+    from bayfit.data.data import Data, DataUnit
+    from bayfit.infer.infer import Infer
+    from bayfit.model.local import line
 
     x = np.array([0.0, 1.0, 2.0, 3.0])
     y = 2.0 * x + 1.0

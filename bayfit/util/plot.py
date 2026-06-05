@@ -1,7 +1,7 @@
 """Matplotlib plotting helpers for models, inference results, and posteriors.
 
 ``Plot`` provides static methods that produce ``matplotlib.figure.Figure``
-objects from curvefit model and inference objects.  All renderers use
+objects from bayfit model and inference objects.  All renderers use
 matplotlib only -- there is no plotly dependency in this module.
 """
 
@@ -28,9 +28,9 @@ from .tools import json_dump
 
 
 class Plot:
-    """Static factory for figures over curvefit models and inference results.
+    """Static factory for figures over bayfit models and inference results.
 
-    Every method accepts a curvefit object and returns a
+    Every method accepts a bayfit object and returns a
     ``matplotlib.figure.Figure``.  No backend selection is needed; the
     class always uses matplotlib.
     """

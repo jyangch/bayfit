@@ -4,8 +4,8 @@ matplotlib.use('Agg')
 
 import numpy as np
 
-from curvefit.model.local import line
-from curvefit.util.plot import Plot
+from bayfit.model.local import line
+from bayfit.util.plot import Plot
 
 
 def test_plot_model_returns_figure():

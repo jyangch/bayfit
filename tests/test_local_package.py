@@ -1,6 +1,6 @@
 import numpy as np
 
-from curvefit.model.local import const, expcut, line, list_local_models, pl
+from bayfit.model.local import const, expcut, line, list_local_models, pl
 
 
 def test_all_models_registered():

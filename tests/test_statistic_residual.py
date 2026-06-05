@@ -1,6 +1,6 @@
 import numpy as np
 
-from curvefit.infer.statistic import LMFIT_SAFE_STATS, Statistic
+from bayfit.infer.statistic import LMFIT_SAFE_STATS, Statistic
 
 
 def lin(x, params):
@@ -61,7 +61,7 @@ def test_residual_array_only_for_lmfit_safe_stats():
         'odr': [2.0, 0.0, -1.0],
         'groth': [2.0, 0.1],
     }
-    from curvefit.infer.pair import Pair
+    from bayfit.infer.pair import Pair
 
     for name, params in cases.items():
         func = Pair._allowed_stats[name]

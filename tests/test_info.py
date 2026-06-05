@@ -1,7 +1,7 @@
 import pytest
 
-from curvefit.model.local import line
-from curvefit.util.info import Info
+from bayfit.model.local import line
+from bayfit.util.info import Info
 
 
 def test_from_list_dict_empty_raises():

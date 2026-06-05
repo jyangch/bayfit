@@ -1,9 +1,9 @@
 import numpy as np
 
-from curvefit.data.data import Data, DataUnit
-from curvefit.infer.analyzer import Bootstrap, Posterior, SampleAnalyzer
-from curvefit.infer.infer import BayesInfer, MaxLikeFit
-from curvefit.model.local import line
+from bayfit.data.data import Data, DataUnit
+from bayfit.infer.analyzer import Bootstrap, Posterior, SampleAnalyzer
+from bayfit.infer.infer import BayesInfer, MaxLikeFit
+from bayfit.model.local import line
 
 
 def _infer(cls):

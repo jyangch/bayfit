@@ -4,10 +4,10 @@ matplotlib.use('Agg')
 
 import numpy as np
 
-from curvefit.data.data import Data, DataUnit
-from curvefit.infer.infer import BayesInfer
-from curvefit.model.local import line
-from curvefit.util.plot import Plot
+from bayfit.data.data import Data, DataUnit
+from bayfit.infer.infer import BayesInfer
+from bayfit.model.local import line
+from bayfit.util.plot import Plot
 
 
 def test_emcee_recovers_linear(tmp_path):

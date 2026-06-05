@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from curvefit.data.data import Data, DataUnit
-from curvefit.infer.analyzer import Bootstrap
-from curvefit.infer.infer import MaxLikeFit
-from curvefit.model.local import line
+from bayfit.data.data import Data, DataUnit
+from bayfit.infer.analyzer import Bootstrap
+from bayfit.infer.infer import MaxLikeFit
+from bayfit.model.local import line
 
 
 def _data(seed=0, stat='chi2'):

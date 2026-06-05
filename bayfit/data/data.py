@@ -18,7 +18,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from curvefit.util.tools import json_dump
+from bayfit.util.tools import json_dump
 
 from ..util.info import Info
 

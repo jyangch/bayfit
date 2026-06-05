@@ -926,7 +926,7 @@ class BayesInfer(Infer):
                 so different runs differ.
 
         Returns:
-            A :class:`~curvefit.infer.analyzer.Posterior`.
+            A :class:`~bayfit.infer.analyzer.Posterior`.
         """
 
         import pymultinest
@@ -1050,7 +1050,7 @@ class BayesInfer(Infer):
                 lets emcee draw fresh entropy, so different runs differ.
 
         Returns:
-            A :class:`~curvefit.infer.analyzer.Posterior`.
+            A :class:`~bayfit.infer.analyzer.Posterior`.
         """
 
         import emcee
@@ -1223,7 +1223,7 @@ class MaxLikeFit(Infer):
 
         Raises:
             ValueError: If any unit's statistic is not in
-                :data:`~curvefit.infer.statistic.LMFIT_SAFE_STATS`; use
+                :data:`~bayfit.infer.statistic.LMFIT_SAFE_STATS`; use
                 :meth:`iminuit` for those.
         """
 
@@ -1253,7 +1253,7 @@ class MaxLikeFit(Infer):
                 and summary JSON; pass ``None`` to skip disk IO.
 
         Returns:
-            A :class:`~curvefit.infer.analyzer.Bootstrap`.
+            A :class:`~bayfit.infer.analyzer.Bootstrap`.
         """
 
         import lmfit
@@ -1319,7 +1319,7 @@ class MaxLikeFit(Infer):
                 and summary JSON.
 
         Returns:
-            A :class:`~curvefit.infer.analyzer.Bootstrap`.
+            A :class:`~bayfit.infer.analyzer.Bootstrap`.
         """
 
         import iminuit

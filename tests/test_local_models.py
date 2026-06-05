@@ -1,6 +1,6 @@
 import numpy as np
 
-from curvefit.model import local
+from bayfit.model import local
 
 # Golden outputs captured before the ruff cleanup (lambda -> def refactor guard).
 # Each model is built, every parameter set to val = 0.3 + 0.17 * j (j = param index),

@@ -1,8 +1,8 @@
 import numpy as np
 
-from curvefit.data.data import Data, DataUnit
-from curvefit.infer.pair import Pair
-from curvefit.model.local import line
+from bayfit.data.data import Data, DataUnit
+from bayfit.infer.pair import Pair
+from bayfit.model.local import line
 
 
 def test_loglike_on_exact_linear_data():
@@ -62,7 +62,7 @@ def test_pair_propagates_lower_limit():
 def test_variance_stats_reject_model_without_logv():
     import pytest
 
-    from curvefit.model.local import pl
+    from bayfit.model.local import pl
 
     x = np.array([1.0, 2.0, 3.0])
     y = np.array([1.0, 4.0, 9.0])
@@ -83,7 +83,7 @@ def test_variance_stats_accept_ln():
 
 
 def test_nonvariance_stats_allow_any_model():
-    from curvefit.model.local import pl
+    from bayfit.model.local import pl
 
     x = np.array([1.0, 2.0, 3.0])
     y = np.array([1.0, 4.0, 9.0])
@@ -146,9 +146,9 @@ def test_pair_nonfinite_model_gives_inf():
 def test_pair_pseudo_residual_matches_stat():
     import numpy as np
 
-    from curvefit.data.data import Data, DataUnit
-    from curvefit.infer.pair import Pair
-    from curvefit.model.local import line
+    from bayfit.data.data import Data, DataUnit
+    from bayfit.infer.pair import Pair
+    from bayfit.model.local import line
 
     x = np.array([0.0, 1.0, 2.0, 3.0])
     y = 2.0 * x + 1.0

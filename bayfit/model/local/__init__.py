@@ -1,4 +1,4 @@
-"""Local model components shipped with curvefit.
+"""Local model components shipped with bayfit.
 
 Re-exports every additive, multiplicative, and mathematical component
 defined in the submodules and tracks them in ``local_models`` for

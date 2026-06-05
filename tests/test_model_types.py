@@ -1,4 +1,4 @@
-from curvefit.model.model import Additive, Mathematic, Model, Multiplicative
+from bayfit.model.model import Additive, Mathematic, Model, Multiplicative
 
 
 def test_base_classes_lock_type():
@@ -30,13 +30,13 @@ def test_base_model_default_type():
 
 
 def test_composite_type_add_plus_add():
-    from curvefit.model.local import line, pl
+    from bayfit.model.local import line, pl
 
     assert (line() + pl()).type == 'add'
 
 
 def test_composite_type_add_times_mul():
-    from curvefit.model.local import expcut, pl
+    from bayfit.model.local import expcut, pl
 
     assert (pl() * expcut()).type == 'add'
 
@@ -44,13 +44,13 @@ def test_composite_type_add_times_mul():
 def test_illegal_composite_raises():
     import pytest
 
-    from curvefit.model.local import line, pl
+    from bayfit.model.local import line, pl
 
     with pytest.raises(ValueError):
         _ = (line() * pl()).type  # add * add is illegal
 
 
 def test_const_plus_add_is_add():
-    from curvefit.model.local import const, line
+    from bayfit.model.local import const, line
 
     assert (line() + const()).type == 'add'

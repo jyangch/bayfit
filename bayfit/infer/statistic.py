@@ -18,9 +18,9 @@ Every statistic shares one keyword bundle:
 model (float64) and ``params`` is the float64 parameter vector (used by the
 variance-fitting kernels to read ``logv``/``k``). No conversion or
 normalisation happens inside the statistics -- the caller (the data layer via
-:class:`~curvefit.infer.pair.Pair`) supplies every value already as
+:class:`~bayfit.infer.pair.Pair`) supplies every value already as
 ``float64``/``bool``. ``up``/``lo`` are per-point upper-/lower-limit boolean
-masks (normalised by :class:`~curvefit.data.data.DataUnit`; all-``False`` means
+masks (normalised by :class:`~bayfit.data.data.DataUnit`; all-``False`` means
 no limits): an upper limit is consistent when ``model <= y`` and a lower limit
 when ``model >= y``; the inconsistent direction contributes ``inf``.
 
@@ -267,14 +267,14 @@ class Statistic:
     parameter vector (used by the variance-fitting statistics to read ``logv``
     and ``k``). Inputs are assumed to be ``float64``/``bool`` already, so no
     conversion happens here; the non-finite-``my`` guard lives in
-    :class:`~curvefit.infer.pair.Pair`'s ``stat_func``/``pseudo_residual_func``.
+    :class:`~bayfit.infer.pair.Pair`'s ``stat_func``/``pseudo_residual_func``.
 
     Each method returns a dict with ``'stat'`` (the summed ``-2 * loglike``) and,
     for the lmfit-safe statistics (``chi2``, ``logchi2``), a ``'residual'`` —
     the signed per-point square-root used by lmfit. The variance-fitting
     statistics omit ``'residual'`` (consumers use ``.get('residual')``). The
     tag-to-method dispatch table lives on
-    :class:`~curvefit.infer.pair.Pair` as ``_allowed_stats``.
+    :class:`~bayfit.infer.pair.Pair` as ``_allowed_stats``.
     """
 
     @staticmethod

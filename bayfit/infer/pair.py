@@ -21,8 +21,8 @@ class Pair:
     statistic returns ``(stat, residual)``.
 
     Attributes:
-        data: The bound :class:`~curvefit.data.data.Data`.
-        model: The bound :class:`~curvefit.model.model.Model`.
+        data: The bound :class:`~bayfit.data.data.Data`.
+        model: The bound :class:`~bayfit.model.model.Model`.
     """
 
     _allowed_stats = MappingProxyType(
@@ -95,7 +95,7 @@ class Pair:
 
         ``chi2f``/``vdr``/``odr`` read a trailing ``logv`` (and ``vdr``/``odr``
         assume the linear ``[k, b, logv]`` layout), so they are only valid for
-        the :class:`~curvefit.model.local.line` model.
+        the :class:`~bayfit.model.local.line` model.
 
         Raises:
             ValueError: If any unit uses such a statistic with a non-``line`` model.

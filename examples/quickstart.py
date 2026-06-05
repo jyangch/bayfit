@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 
-from curvefit import BayesInfer, Data, DataUnit, Plot
-from curvefit.model.local import line
+from bayfit import BayesInfer, Data, DataUnit, Plot
+from bayfit.model.local import line
 
 savepath = './quickstart'
 

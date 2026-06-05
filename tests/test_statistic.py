@@ -1,6 +1,6 @@
 import numpy as np
 
-from curvefit.infer.statistic import Statistic
+from bayfit.infer.statistic import Statistic
 
 
 def lin(x, params):
@@ -141,7 +141,7 @@ def _groth_reference(y, my):
 
 
 def test_groth_core_matches_reference_moderate():
-    from curvefit.infer.statistic import _groth_core
+    from bayfit.infer.statistic import _groth_core
 
     y = np.array([5.0, 10.0, 3.0, 20.0])
     my = np.array([4.0, 12.0, 2.5, 18.0])
@@ -152,14 +152,14 @@ def test_groth_core_matches_reference_moderate():
 
 def test_groth_core_zero_count_analytic():
     # I0(0) = 1, so a zero count contributes stat = 2 * (y + my)
-    from curvefit.infer.statistic import _groth_core
+    from bayfit.infer.statistic import _groth_core
 
     assert np.isclose(_groth_core(np.array([7.0]), np.array([0.0])), 14.0)
     assert np.isclose(_groth_core(np.array([0.0]), np.array([5.0])), 10.0)
 
 
 def test_groth_core_finite_for_large_counts():
-    from curvefit.infer.statistic import _groth_core
+    from bayfit.infer.statistic import _groth_core
 
     y = np.array([5000.0, 200.0])
     my = np.array([5000.0, 220.0])
@@ -175,7 +175,7 @@ def test_all_six_statistics_callable_finite():
     up = np.zeros(3, dtype=bool)
     # vdr/odr expect [k, b, logv]; chi2f expects logv as last
     params = [1.0, 0.0, -1.0]
-    from curvefit.infer.pair import Pair
+    from bayfit.infer.pair import Pair
 
     for name in ['chi2', 'chi2f', 'logchi2', 'vdr', 'odr', 'groth']:
         func = Pair._allowed_stats[name]
