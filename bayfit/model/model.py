@@ -72,6 +72,33 @@ class Model:
 
         pass
 
+    @staticmethod
+    def _asx(X):
+        """Extract the primary x-grid from ``X`` (scalar, 1-D, or 2-D).
+
+        Returns:
+            Tuple ``(x, scalar)``: ``x`` is always a 1-D array; ``scalar`` is
+            ``True`` when the input was 0-D, signalling the caller to unwrap
+            the single result.
+
+        Raises:
+            ValueError: If ``X`` has more than two dimensions.
+        """
+
+        X = np.asarray(X)
+        scalar = X.ndim == 0
+
+        if X.ndim == 0:
+            x = X[np.newaxis]
+        elif X.ndim == 1:
+            x = X
+        elif X.ndim == 2:
+            x = X[:, 0]
+        else:
+            raise ValueError('X must be scalar, 1-D, or 2-D')
+
+        return x, scalar
+
     @property
     def mdicts(self):
         """Mapping from ``expr`` to component model; overridden by composites."""
