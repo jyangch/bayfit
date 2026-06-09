@@ -284,10 +284,13 @@ class DataUnit:
     default to ``False``.
 
     Attributes:
-        xs: Independent-variable values, shape ``(npoint,)``.
+        xs: Independent-variable values, shape ``(npoint, ndim)``.  A 1-D
+            input of shape ``(npoint,)`` is auto-promoted to ``(npoint, 1)``.
         ys: Dependent-variable values, shape ``(npoint,)``.
         npoint: Number of data points.
-        xerr: X error array, shape ``(2, npoint)``, rows are ``[low, high]``.
+        ndim: Number of independent-variable dimensions (``xs.shape[1]``).
+        xerr: X error array, shape ``(ndim, 2, npoint)``; for each dimension
+            the two rows are ``[low, high]``.
         yerr: Y error array, shape ``(2, npoint)``, rows are ``[low, high]``.
         weight: Per-unit scalar fit weight.
         ups: Boolean upper-limit mask, shape ``(npoint,)``.
@@ -322,10 +325,19 @@ class DataUnit:
         """
 
         self.xs = np.asarray(xs, dtype=float)
+        if self.xs.ndim == 1:
+            self.xs = self.xs[:, None]
+        elif self.xs.ndim != 2:
+            raise ValueError('xs must be 1-D (npoint,) or 2-D (npoint, ndim)')
+
         self.ys = np.asarray(ys, dtype=float)
         self.npoint = self.xs.shape[0]
+        self.ndim = self.xs.shape[1]
 
-        self.xerr = self._normalize_err(xerr, default=0.0)
+        if self.ys.shape[0] != self.npoint:
+            raise ValueError('ys length does not match xs')
+
+        self.xerr = self._normalize_xerr(xerr)
         self.yerr = self._normalize_err(yerr, default=1.0)
         self.ups = self._normalize_mask(ups, 'up')
         self.los = self._normalize_mask(los, 'lo')
@@ -359,6 +371,50 @@ class DataUnit:
             raise ValueError('2D error should have shape (2, npoint) or (npoint, 2)')
 
         raise ValueError('unsupported error shape')
+
+    def _normalize_xerr(self, err):
+
+        n = self.npoint
+        d = self.ndim
+
+        if err is None:
+            return np.zeros((d, 2, n), dtype=float)
+
+        err = np.asarray(err, dtype=float)
+
+        if err.ndim == 0:
+            return np.full((d, 2, n), float(err))
+
+        if err.ndim == 1:
+            if d != 1:
+                raise ValueError(
+                    '1-D xerr is only allowed when ndim == 1; '
+                    'give per-dimension errors as (ndim, 2, npoint)'
+                )
+            if err.shape[0] != n:
+                raise ValueError('xerr length does not match data')
+            return np.repeat(err[None, None, :], 2, axis=1)
+
+        if err.ndim == 2:
+            if d != 1:
+                raise ValueError(
+                    '2-D xerr is only allowed when ndim == 1; '
+                    'use (ndim, 2, npoint) for multi-dimensional xerr'
+                )
+            if err.shape == (2, n):
+                return err[None, :, :].astype(float)
+            if err.shape == (n, 2):
+                return err.T[None, :, :].astype(float)
+            raise ValueError('2D xerr should have shape (2, npoint) or (npoint, 2)')
+
+        if err.ndim == 3:
+            if err.shape == (d, 2, n):
+                return err.astype(float)
+            if err.shape == (d, n, 2):
+                return np.transpose(err, (0, 2, 1)).astype(float)
+            raise ValueError('3D xerr should have shape (ndim, 2, npoint) or (ndim, npoint, 2)')
+
+        raise ValueError('unsupported xerr shape')
 
     def _normalize_mask(self, mask, label):
 
