@@ -73,8 +73,8 @@ class Plot:
         if not isinstance(cls, DataUnit):
             raise TypeError('cls is not DataUnit type, cannot call dataunit method')
 
-        xs = cls.xs.astype(float)
-        xerr = cls.xerr.astype(float)
+        xs = cls.xs[:, 0].astype(float)
+        xerr = cls.xerr[0].astype(float)
 
         ys = cls.ys.astype(float)
         yerr = cls.yerr.astype(float)
@@ -180,8 +180,8 @@ class Plot:
             gs = fig.add_gridspec(1, 1, wspace=0, hspace=0)
             ax = fig.add_subplot(gs[0, 0])
 
-        xs = cls.xs
-        xerr = cls.xerr
+        xs = [x[:, 0] for x in cls.xs]
+        xerr = [xe[0] for xe in cls.xerr]
         ys = cls.ys
         yerr = cls.yerr
 
@@ -320,8 +320,8 @@ class Plot:
             ax1 = fig.add_subplot(gs[0:3, 0])
             ax2 = fig.add_subplot(gs[3, 0], sharex=ax1)
 
-        obs_xs = cls.data.xs
-        obs_xerr = cls.data.xerr
+        obs_xs = [x[:, 0] for x in cls.data.xs]
+        obs_xerr = [xe[0] for xe in cls.data.xerr]
         obs_ys = cls.data.ys
         obs_yerr = cls.data.yerr
         mo_ys = cls.model.ys
@@ -558,8 +558,8 @@ class Plot:
             ax1 = fig.add_subplot(gs[0:3, 0])
             ax2 = fig.add_subplot(gs[3, 0], sharex=ax1)
 
-        obs_xs = cls.data_xs
-        obs_xerr = cls.data_xerr
+        obs_xs = [x[:, 0] for x in cls.data_xs]
+        obs_xerr = [xe[0] for xe in cls.data_xerr]
         obs_ys = cls.data_ys
         obs_yerr = cls.data_yerr
         mo_ys = cls.model_ys
