@@ -42,10 +42,11 @@ class line(Additive):
         Returns:
             1-D array of model values with the same length as ``X``.
         """
-        k = self.params['k'].value
-        b = self.params['b'].value
 
         x, scalar = self._asx(X)
+
+        k = self.params['k'].value
+        b = self.params['b'].value
 
         y = k * x + b
 
@@ -76,12 +77,13 @@ class pl(Additive):
         Returns:
             1-D array of model values with the same length as ``X``.
         """
+
+        x, scalar = self._asx(X)
+
         alpha = self.params['alpha'].value
         logA = self.params['logA'].value
 
         amp = 10**logA
-
-        x, scalar = self._asx(X)
 
         y = amp * x**alpha
 
@@ -112,12 +114,13 @@ class expd(Additive):
         Returns:
             1-D array of model values with the same length as ``X``.
         """
+
+        x, scalar = self._asx(X)
+
         tau = self.params['tau'].value
         logA = self.params['logA'].value
 
         amp = 10**logA
-
-        x, scalar = self._asx(X)
 
         y = amp * np.exp(-x / tau)
 
@@ -172,6 +175,7 @@ class spindown(Additive):
         Raises:
             RuntimeError: If the ODE solver fails to converge.
         """
+
         t, scalar = self._asx(X)
 
         Bp = 10 ** self.params['log$B_{p,15}$'].value * 1e15
@@ -207,9 +211,9 @@ class spindown(Additive):
         else:
             raise RuntimeError('ODE solver failed: ' + y_hat.message)
 
-        L = eta / fb * Bp**2 * R_**6 * Omega**4 / (6 * c_**3)
+        luminosity = eta / fb * Bp**2 * R_**6 * Omega**4 / (6 * c_**3)
 
-        return L[0] if scalar else L
+        return luminosity[0] if scalar else luminosity
 
 
 class psd(Additive):

@@ -108,6 +108,7 @@ class Data:
         info_dict = OrderedDict()
         info_dict['Name'] = [key for key in self.data]
         info_dict['Npoint'] = [unit.npoint for unit in self.data.values()]
+        info_dict['Ndim'] = [unit.ndim for unit in self.data.values()]
         info_dict['Statistic'] = [unit.stat for unit in self.data.values()]
         info_dict['Weight'] = [unit.weight for unit in self.data.values()]
 
@@ -594,6 +595,7 @@ class DataUnit:
 
         info_dict = OrderedDict()
         info_dict['npoint'] = self.npoint
+        info_dict['ndim'] = self.ndim
         info_dict['stat'] = self.stat
         info_dict['weight'] = self.weight
 

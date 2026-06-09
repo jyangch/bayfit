@@ -120,15 +120,15 @@ class Model:
         scalar = X.ndim == 0
 
         if X.ndim == 0:
-            XX = X.reshape(1, 1)
+            X = X.reshape(1, 1)
         elif X.ndim == 1:
-            XX = X[:, None]
+            X = X[:, None]
         elif X.ndim == 2:
-            XX = X
+            X = X
         else:
             raise ValueError('X must be scalar, 1-D, or 2-D')
 
-        return XX, scalar
+        return X, scalar
 
     @property
     def mdicts(self):
@@ -319,10 +319,7 @@ class Model:
         statistic kernels without further conversion.
         """
 
-        return [
-            self.func(np.asarray(unit.xs)).astype(float)
-            for unit in self.fit_to.data.values()
-        ]
+        return [self.func(np.asarray(unit.xs)).astype(float) for unit in self.fit_to.data.values()]
 
     @property
     def ps(self):
