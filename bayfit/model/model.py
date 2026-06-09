@@ -262,7 +262,7 @@ class Model:
         """
 
         return [
-            self.func(np.asarray(unit.xs)[:, None]).astype(float)
+            self.func(np.asarray(unit.xs)).astype(float)
             for unit in self.fit_to.data.values()
         ]
 
