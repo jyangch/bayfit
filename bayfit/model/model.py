@@ -99,6 +99,37 @@ class Model:
 
         return x, scalar
 
+    @staticmethod
+    def _asX(X):
+        """Normalise ``X`` to a 2-D design matrix ``(npoint, ndim)``.
+
+        Supports scalar, 1-D, or 2-D input, mirroring the ``DataUnit``
+        promotion rule: a 1-D ``(n,)`` input is treated as ``n`` points of
+        one dimension.
+
+        Returns:
+            Tuple ``(XX, scalar)``: ``XX`` is always 2-D ``(npoint, ndim)``;
+            ``scalar`` is ``True`` when the input was 0-D (a single point),
+            signalling the caller to unwrap the single result.
+
+        Raises:
+            ValueError: If ``X`` has more than two dimensions.
+        """
+
+        X = np.asarray(X)
+        scalar = X.ndim == 0
+
+        if X.ndim == 0:
+            XX = X.reshape(1, 1)
+        elif X.ndim == 1:
+            XX = X[:, None]
+        elif X.ndim == 2:
+            XX = X
+        else:
+            raise ValueError('X must be scalar, 1-D, or 2-D')
+
+        return XX, scalar
+
     @property
     def mdicts(self):
         """Mapping from ``expr`` to component model; overridden by composites."""
