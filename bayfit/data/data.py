@@ -330,55 +330,27 @@ class DataUnit:
         elif self.xs.ndim != 2:
             raise ValueError('xs must be 1-D (npoint,) or 2-D (npoint, ndim)')
 
-        self.ys = np.asarray(ys, dtype=float)
         self.npoint = self.xs.shape[0]
         self.ndim = self.xs.shape[1]
 
+        self.ys = np.asarray(ys, dtype=float)
         if self.ys.shape[0] != self.npoint:
             raise ValueError('ys length does not match xs')
 
-        self.xerr = self._normalize_xerr(xerr)
-        self.yerr = self._normalize_err(yerr, default=1.0)
+        self.xerr = self._normalize_xerr(xerr, default=0.0)
+        self.yerr = self._normalize_yerr(yerr, default=1.0)
         self.ups = self._normalize_mask(ups, 'up')
         self.los = self._normalize_mask(los, 'lo')
         self.stat = stat
         self.weight = float(weight)
 
-    def _normalize_err(self, err, default=0.0):
-
-        n = self.npoint
-
-        if err is None:
-            arr = np.full(n, default, dtype=float)
-            return np.vstack([arr, arr])
-
-        err = np.asarray(err, dtype=float)
-
-        if err.ndim == 0:
-            arr = np.full(n, float(err))
-            return np.vstack([arr, arr])
-
-        if err.ndim == 1:
-            if err.shape[0] != n:
-                raise ValueError('error length does not match data')
-            return np.vstack([err, err])
-
-        if err.ndim == 2:
-            if err.shape == (2, n):
-                return err.astype(float)
-            if err.shape == (n, 2):
-                return err.T.astype(float)
-            raise ValueError('2D error should have shape (2, npoint) or (npoint, 2)')
-
-        raise ValueError('unsupported error shape')
-
-    def _normalize_xerr(self, err):
+    def _normalize_xerr(self, err, default=0.0):
 
         n = self.npoint
         d = self.ndim
 
         if err is None:
-            return np.zeros((d, 2, n), dtype=float)
+            return np.full((d, 2, n), default, dtype=float)
 
         err = np.asarray(err, dtype=float)
 
@@ -415,6 +387,34 @@ class DataUnit:
             raise ValueError('3D xerr should have shape (ndim, 2, npoint) or (ndim, npoint, 2)')
 
         raise ValueError('unsupported xerr shape')
+
+    def _normalize_yerr(self, err, default=1.0):
+
+        n = self.npoint
+
+        if err is None:
+            arr = np.full(n, default, dtype=float)
+            return np.vstack([arr, arr])
+
+        err = np.asarray(err, dtype=float)
+
+        if err.ndim == 0:
+            arr = np.full(n, float(err))
+            return np.vstack([arr, arr])
+
+        if err.ndim == 1:
+            if err.shape[0] != n:
+                raise ValueError('error length does not match data')
+            return np.vstack([err, err])
+
+        if err.ndim == 2:
+            if err.shape == (2, n):
+                return err.astype(float)
+            if err.shape == (n, 2):
+                return err.T.astype(float)
+            raise ValueError('2D error should have shape (2, npoint) or (npoint, 2)')
+
+        raise ValueError('unsupported error shape')
 
     def _normalize_mask(self, mask, label):
 
