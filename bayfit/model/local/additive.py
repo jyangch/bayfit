@@ -252,8 +252,6 @@ class psd(Additive):
         self.config = OrderedDict()
         self.config['psd_num'] = Cfg(1)
 
-        self.params = OrderedDict()
-
     @cached_property(lambda self: self.config['psd_num'].value)
     def params(self):
 
@@ -279,6 +277,8 @@ class psd(Additive):
 
         else:
             raise ValueError('Invalid value for psd_num config.')
+
+        return params
 
     def func(self, X):
         """Return the PSD model value at each frequency in ``X[:, 0]``.

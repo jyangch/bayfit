@@ -73,7 +73,7 @@ class Model:
         pass
 
     @staticmethod
-    def _asx(X):
+    def asx(X):
         """Extract the primary x-grid from ``X`` (scalar, 1-D, or 2-D).
 
         Returns:
@@ -100,7 +100,7 @@ class Model:
         return x, scalar
 
     @staticmethod
-    def _asX(X):
+    def asX(X):
         """Normalise ``X`` to a 2-D design matrix ``(npoint, ndim)``.
 
         Supports scalar, 1-D, or 2-D input, mirroring the ``DataUnit``
