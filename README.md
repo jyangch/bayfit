@@ -121,8 +121,11 @@ Both `Plot.*` calls return a `Figure` that displays inline in notebooks.
 From a script, choose a file-writing backend and save a PDF:
 
 ```python
-Plot.infer(post, ploter='matplotlib').save('fit')
-Plot.post_corner(post, ploter='cornerpy').save('corner')
+fig = Plot.infer(post, ploter='matplotlib')
+fig.save('fit')
+
+fig = Plot.post_corner(post, ploter='cornerpy')
+fig.save('corner')
 ```
 
 Swap `line()` for any component returned by `list_local_models()`, or
