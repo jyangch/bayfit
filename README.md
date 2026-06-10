@@ -122,10 +122,10 @@ From a script, choose a file-writing backend and save a PDF:
 
 ```python
 fig = Plot.infer(post,  ploter='matplotlib')
-fig.save('fit')
+fig.save('./out/fit')
 
 fig = Plot.post_corner(post, ploter='cornerpy')
-fig.save('corner')
+fig.save('./out/corner')
 ```
 
 Swap `line()` for any component returned by `list_local_models()`, or
