@@ -106,7 +106,7 @@ model = line()
 
 # pair data with the model and sample the posterior
 infer = BayesInfer([(data, model)])
-post = infer.emcee(nstep=2000, discard=500, resume=False, savepath='./out')
+post = infer.multinest(nlive=400, resume=False, savepath='./out')
 
 k, b, logv = post.par_best_ci[:3]
 # recovers the slope, intercept, and intrinsic scatter sigma_int = 10**logv
@@ -121,7 +121,7 @@ Both `Plot.*` calls return a `Figure` that displays inline in notebooks.
 From a script, choose a file-writing backend and save a PDF:
 
 ```python
-fig = Plot.infer(post, ploter='matplotlib')
+fig = Plot.infer(post,  ploter='matplotlib')
 fig.save('fit')
 
 fig = Plot.post_corner(post, ploter='cornerpy')
