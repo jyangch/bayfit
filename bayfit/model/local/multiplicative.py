@@ -40,12 +40,11 @@ class expcut(Multiplicative):
             length as ``X``.
         """
 
-        x, scalar = self._asx(X)
+        x, scalar = self.asx(X)
 
         ethr = self.config['threshold'].value
 
-        logxc = self.params['logxc'].value
-        xc = 10**logxc
+        xc = 10 ** self.params['logxc'].value
 
         nou = np.zeros_like(x, dtype=float)
 
