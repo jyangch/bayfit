@@ -12,7 +12,9 @@ from collections import OrderedDict
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from ...util.param import Par
+from bayfit.util.tools import cached_property
+
+from ...util.param import Cfg, Par
 from ...util.prior import unif
 from ..model import Additive
 
@@ -22,16 +24,15 @@ class line(Additive):
 
     def __init__(self):
         """Initialise linear model with slope ``k``, intercept ``b``, log-variance ``logv``."""
-
         self.expr = 'line'
         self.comment = 'linear model'
 
         self.config = OrderedDict()
 
         self.params = OrderedDict()
-        self.params['k'] = Par(0, unif(-10, 10))
-        self.params['b'] = Par(0, unif(-10, 10))
-        self.params['logv'] = Par(0, unif(-10, 10))
+        self.params[r'$k$'] = Par(0, unif(-10, 10))
+        self.params[r'$b$'] = Par(0, unif(-10, 10))
+        self.params[r'log$v$'] = Par(0, unif(-10, 10))
 
     def func(self, X):
         r"""Return the linear model :math:`k x + b` evaluated on ``X[:, 0]``.
@@ -43,10 +44,10 @@ class line(Additive):
             1-D array of model values with the same length as ``X``.
         """
 
-        x, scalar = self._asx(X)
+        x, scalar = self.asx(X)
 
-        k = self.params['k'].value
-        b = self.params['b'].value
+        k = self.params[r'$k$'].value
+        b = self.params[r'$b$'].value
 
         y = k * x + b
 
@@ -65,8 +66,8 @@ class pl(Additive):
         self.config = OrderedDict()
 
         self.params = OrderedDict()
-        self.params['alpha'] = Par(0, unif(-10, 10))
-        self.params['logA'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha$'] = Par(0, unif(-10, 10))
+        self.params[r'log$A$'] = Par(0, unif(-10, 10))
 
     def func(self, X):
         r"""Return the power-law :math:`10^{\mathrm{logA}} \, x^{\alpha}` on ``X[:, 0]``.
@@ -78,12 +79,10 @@ class pl(Additive):
             1-D array of model values with the same length as ``X``.
         """
 
-        x, scalar = self._asx(X)
+        x, scalar = self.asx(X)
 
-        alpha = self.params['alpha'].value
-        logA = self.params['logA'].value
-
-        amp = 10**logA
+        alpha = self.params[r'$\alpha$'].value
+        amp = 10 ** self.params[r'log$A$'].value
 
         y = amp * x**alpha
 
@@ -102,8 +101,8 @@ class expd(Additive):
         self.config = OrderedDict()
 
         self.params = OrderedDict()
-        self.params['tau'] = Par(5, unif(0, 10))
-        self.params['logA'] = Par(0, unif(-10, 10))
+        self.params[r'$\tau$'] = Par(5, unif(0, 10))
+        self.params[r'log$A$'] = Par(0, unif(-10, 10))
 
     def func(self, X):
         r"""Return the exponential decay :math:`10^{\mathrm{logA}} e^{-x/\tau}` on ``X[:, 0]``.
@@ -115,12 +114,10 @@ class expd(Additive):
             1-D array of model values with the same length as ``X``.
         """
 
-        x, scalar = self._asx(X)
+        x, scalar = self.asx(X)
 
-        tau = self.params['tau'].value
-        logA = self.params['logA'].value
-
-        amp = 10**logA
+        tau = self.params[r'$\tau$'].value
+        amp = 10 ** self.params[r'log$A$'].value
 
         y = amp * np.exp(-x / tau)
 
@@ -130,12 +127,28 @@ class expd(Additive):
 class spindown(Additive):
     """Magnetar spin-down luminosity model solved via an ODE for the spin frequency."""
 
+    # Physical constants (CGS) and ODE rescaling factors -- parameter-independent.
+    _R = 1.2e6  # neutron-star radius [cm]
+    _C = 2.998e10  # speed of light [cm/s]
+    _G = 6.674e-8  # gravitational constant [cgs]
+    _I = 3.33e45  # moment of inertia [g cm^2]
+    _EPS = 1.0e-4  # ellipticity
+    _FB = 0.1  # beaming factor
+    _T = 1e2  # time rescaling [s]
+    _Y = 1e3  # frequency rescaling [rad/s]
+
+    # Gravitational-wave braking coefficient does not depend on any parameter.
+    _B_GW = -32 * _G * _I * _EPS**2 / (5 * _C**5)
+    _B_HAT = _B_GW * _T * _Y**4
+
     def __init__(self):
         """Initialise spin-down model with log-B, log-P0, and log-efficiency parameters."""
         super().__init__()
 
         self.expr = 'spindown'
         self.comment = 'magnetar spin-down model'
+
+        self.config = OrderedDict()
 
         self.params = OrderedDict()
         self.params[r'log$B_{p,15}$'] = Par(0, unif(-1, 1))
@@ -163,7 +176,7 @@ class spindown(Additive):
         """Return the magnetar spin-down luminosity at each time in ``X[:, 0]``.
 
         Integrates the spin-frequency ODE numerically with :func:`scipy.integrate.solve_ivp`
-        using the physical magnetar constants stored as local variables, then
+        using the physical magnetar constants stored as class attributes, then
         converts the resulting spin frequency to radiated power.
 
         Args:
@@ -173,45 +186,47 @@ class spindown(Additive):
             1-D array of luminosity values (in erg/s) with the same length as ``X``.
 
         Raises:
+            ValueError: If any requested time is negative (integration starts
+                at ``t = 0``).
             RuntimeError: If the ODE solver fails to converge.
         """
 
-        t, scalar = self._asx(X)
+        t, scalar = self.asx(X)
 
         Bp = 10 ** self.params['log$B_{p,15}$'].value * 1e15
         P0 = 10 ** self.params['log$P_{0,-3}$'].value * 1e-3
         eta = 10 ** self.params['log$\\eta_{-3}$'].value * 1e-3
 
-        R_ = 1.2e6
-        c_ = 2.998e10
-        G_ = 6.674e-8
-        I_ = 3.33e45
-        eps = 1.0e-4
-        fb = 0.1
+        a = -(Bp**2) * self._R**6 / (6 * self._C**3 * self._I)
+        a_hat = a * self._T * self._Y**2
 
-        T = 1e2
-        Y = 1e3
-
-        a = -(Bp**2) * R_**6 / (6 * c_**3 * I_)
-        a_hat = a * T * Y**2
-
-        b = -32 * G_ * I_ * eps**2 / (5 * c_**5)
-        b_hat = b * T * Y**4
-
-        t0 = 0
         y0 = 2.0 * np.pi / P0
-        y0_hat = y0 / Y
+        y0_hat = y0 / self._Y
 
-        t_hat = t / T
-        span = (t0, max(t_hat))
+        t_hat = np.asarray(t, dtype=float) / self._T
 
-        y_hat = solve_ivp(self.ode, span, [y0_hat], args=(a_hat, b_hat), t_eval=t_hat)
-        if y_hat.success:
-            Omega = y_hat.y[0] * Y
+        if np.any(t_hat < 0):
+            raise ValueError('spindown requires non-negative times (integration starts at t=0)')
+
+        # solve_ivp needs t_eval sorted within the span; sort, solve, then restore order.
+        order = np.argsort(t_hat, kind='stable')
+        t_sorted = t_hat[order]
+        tf = t_sorted[-1]
+
+        if tf == 0:
+            # Every requested time is t=0, i.e. the initial condition Omega(0) = y0.
+            Omega = np.full(t_hat.shape, y0)
         else:
-            raise RuntimeError('ODE solver failed: ' + y_hat.message)
+            y_hat = solve_ivp(
+                self.ode, (0.0, tf), [y0_hat], args=(a_hat, self._B_HAT), t_eval=t_sorted
+            )
+            if not y_hat.success:
+                raise RuntimeError('ODE solver failed: ' + y_hat.message)
 
-        luminosity = eta / fb * Bp**2 * R_**6 * Omega**4 / (6 * c_**3)
+            Omega = np.empty_like(t_hat)
+            Omega[order] = y_hat.y[0] * self._Y
+
+        luminosity = eta / self._FB * Bp**2 * self._R**6 * Omega**4 / (6 * self._C**3)
 
         return luminosity[0] if scalar else luminosity
 
@@ -219,7 +234,7 @@ class spindown(Additive):
 class psd(Additive):
     """Power spectral density model: white noise plus up to two Lorentzian components."""
 
-    def __init__(self, expr):
+    def __init__(self):
         """Initialise the PSD model for the requested variant.
 
         Args:
@@ -230,33 +245,40 @@ class psd(Additive):
         Raises:
             ValueError: If ``expr`` is not one of the supported variant strings.
         """
-        super().__init__()
 
-        self.expr = expr
+        self.expr = 'psd'
         self.comment = 'power spectral distribution model'
+
+        self.config = OrderedDict()
+        self.config['psd_num'] = Cfg(1)
 
         self.params = OrderedDict()
 
-        if self.expr == 'white':
-            self.params['$A_w$'] = Par(2, unif(0, 5))
+    @cached_property(lambda self: self.config['psd_num'].value)
+    def params(self):
 
-        elif self.expr == 'psd1':
-            self.params['$A_w$'] = Par(2, unif(0, 5))
-            self.params['$A_1$'] = Par(10, unif(0, 30))
-            self.params['$\\nu_1$'] = Par(1000, unif(500, 5000))
-            self.params['log$\\Delta\\nu_1$'] = Par(2, unif(1, 3))
+        params = OrderedDict()
 
-        elif self.expr == 'psd2':
-            self.params['$A_w$'] = Par(2, unif(0, 5))
-            self.params['$A_1$'] = Par(10, unif(0, 30))
-            self.params['$\\nu_1$'] = Par(1000, unif(500, 5000))
-            self.params['log$\\Delta\\nu_1$'] = Par(2, unif(1, 3))
-            self.params['$A_2$'] = Par(10, unif(0, 30))
-            self.params['$\\nu_2$'] = Par(1000, unif(500, 5000))
-            self.params['log$\\Delta\\nu_2$'] = Par(2, unif(1, 3))
+        if self.config['psd_num'].value == 0:
+            params[r'$A_w$'] = Par(2, unif(0, 5))
+
+        elif self.config['psd_num'].value == 1:
+            params[r'$A_w$'] = Par(2, unif(0, 5))
+            params[r'$A_1$'] = Par(10, unif(0, 30))
+            params[r'$\nu_1$'] = Par(1000, unif(500, 5000))
+            params[r'log$\Delta\nu_1$'] = Par(2, unif(1, 3))
+
+        elif self.config['psd_num'].value == 2:
+            params[r'$A_w$'] = Par(2, unif(0, 5))
+            params[r'$A_1$'] = Par(10, unif(0, 30))
+            params[r'$\nu_1$'] = Par(1000, unif(500, 5000))
+            params[r'log$\Delta\nu_1$'] = Par(2, unif(1, 3))
+            params[r'$A_2$'] = Par(10, unif(0, 30))
+            params[r'$\nu_2$'] = Par(1000, unif(500, 5000))
+            params[r'log$\Delta\nu_2$'] = Par(2, unif(1, 3))
 
         else:
-            raise ValueError('unsupported expr value')
+            raise ValueError('Invalid value for psd_num config.')
 
     def func(self, X):
         """Return the PSD model value at each frequency in ``X[:, 0]``.
@@ -270,66 +292,28 @@ class psd(Additive):
         Raises:
             ValueError: If ``self.expr`` is not a supported variant string.
         """
-        nu, scalar = self._asx(X)
 
-        theta = [par.value for par in self.params.values()]
+        nu, scalar = self.asx(X)
 
-        if self.expr == 'white':
-            y = self.white(nu, theta)
+        psd_num = self.config['psd_num'].value
+        Aw = self.params[r'$A_w$'].value
 
-        elif self.expr == 'psd1':
-            y = self.psd1(nu, theta)
+        if psd_num == 0:
+            Pnu = np.ones_like(nu, dtype=float) * Aw
 
-        elif self.expr == 'psd2':
-            y = self.psd2(nu, theta)
+        elif psd_num == 1:
+            A1 = self.params[r'$A_1$'].value
+            nu1 = self.params[r'$\nu_1$'].value
+            dnu1 = 10 ** self.params[r'log$\Delta\nu_1$'].value
+            Pnu = Aw + A1 / (1 + (nu - nu1) ** 2 / dnu1**2)
 
-        else:
-            raise ValueError('unsupported expr value')
+        elif psd_num == 2:
+            A1 = self.params[r'$A_1$'].value
+            nu1 = self.params[r'$\nu_1$'].value
+            dnu1 = 10 ** self.params[r'log$\Delta\nu_1$'].value
+            A2 = self.params[r'$A_2$'].value
+            nu2 = self.params[r'$\nu_2$'].value
+            dnu2 = 10 ** self.params[r'log$\Delta\nu_2$'].value
+            Pnu = Aw + A1 / (1 + (nu - nu1) ** 2 / dnu1**2) + A2 / (1 + (nu - nu2) ** 2 / dnu2**2)
 
-        return y[0] if scalar else y
-
-    @staticmethod
-    def white(nu, cube):
-        """Return a flat (white) noise spectrum with constant power ``Aw``.
-
-        The ``white``, ``psd1``, and ``psd2`` family evaluate the corresponding
-        PSD variant on raw frequency arrays. ``psd1`` adds one Lorentzian peak
-        and ``psd2`` adds two independent Lorentzian peaks to the white floor.
-
-        Args:
-            nu: 1-D frequency-grid array.
-            cube: List of parameter values in the order used by the parent
-                ``psd`` ``params`` dict for the matching ``expr`` variant.
-
-        Returns:
-            1-D array of PSD values with the same shape as ``nu``.
-        """
-        Aw = cube[0]
-        Pnu = np.ones_like(nu) * Aw
-
-        return Pnu
-
-    @staticmethod
-    def psd1(nu, cube):
-
-        Aw = cube[0]
-        A1 = cube[1]
-        nu1 = cube[2]
-        dnu1 = 10 ** cube[3]
-        Pnu = Aw + A1 / (1 + (nu - nu1) ** 2 / dnu1**2)
-
-        return Pnu
-
-    @staticmethod
-    def psd2(nu, cube):
-
-        Aw = cube[0]
-        A1 = cube[1]
-        nu1 = cube[2]
-        dnu1 = 10 ** cube[3]
-        A2 = cube[4]
-        nu2 = cube[5]
-        dnu2 = 10 ** cube[6]
-        Pnu = Aw + A1 / (1 + (nu - nu1) ** 2 / dnu1**2) + A2 / (1 + (nu - nu2) ** 2 / dnu2**2)
-
-        return Pnu
+        return Pnu[0] if scalar else Pnu
