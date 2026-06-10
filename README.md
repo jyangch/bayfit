@@ -88,6 +88,7 @@ import numpy as np
 from bayfit.data.data import Data, DataUnit
 from bayfit.infer.infer import BayesInfer
 from bayfit.model.local import line
+from bayfit.util.plot import Plot
 
 # synthetic data: y = 2x + 1 with measurement error *and* intrinsic scatter
 rng = np.random.default_rng(1)
@@ -110,6 +111,18 @@ post = infer.emcee(nstep=2000, discard=500, resume=False, savepath='./out')
 k, b, logv = post.par_best_ci[:3]
 # recovers the slope, intercept, and intrinsic scatter sigma_int = 10**logv
 print(f'k = {k:.2f}, b = {b:.2f}, sigma_int = {10 ** logv:.2f}')   # -> ~2.0, ~1.0, ~1.0
+
+# inspect the fit and the posterior (auto-display inline in notebooks)
+Plot.infer(post)        # data, best-fit model, and residuals
+Plot.post_corner(post)  # parameter corner plot
+```
+
+Both `Plot.*` calls return a `Figure` that displays inline in notebooks.
+From a script, choose a file-writing backend and save a PDF:
+
+```python
+Plot.infer(post, ploter='matplotlib').save('fit')
+Plot.post_corner(post, ploter='cornerpy').save('corner')
 ```
 
 Swap `line()` for any component returned by `list_local_models()`, or
