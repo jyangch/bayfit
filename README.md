@@ -79,7 +79,8 @@ package).
 
 ## Quick start
 
-Fit a straight line to noisy data with MCMC:
+Fit a straight line — recovering its slope, intercept, and intrinsic
+scatter — to noisy data with MCMC:
 
 ```python
 import numpy as np
@@ -88,26 +89,27 @@ from bayfit.data.data import Data, DataUnit
 from bayfit.infer.infer import BayesInfer
 from bayfit.model.local import line
 
-# synthetic data: y = 2x + 1 + noise
-rng = np.random.default_rng(0)
-x = np.linspace(0, 10, 30)
-yerr = np.full(x.size, 0.5)
-y = 2.0 * x + 1.0 + rng.normal(0, 0.5, x.size)
+# synthetic data: y = 2x + 1 with measurement error *and* intrinsic scatter
+rng = np.random.default_rng(1)
+x = np.linspace(0, 10, 40)
+yerr = np.full(x.size, 0.3)        # measurement error
+sigma_int = 1.0                    # intrinsic scatter (logv_true = log10(1) = 0)
+y = 2.0 * x + 1.0 + rng.normal(0, np.hypot(yerr, sigma_int))
 
-# one data unit -> a Data container
-unit = DataUnit(x, y, yerr=yerr, stat='chi2')
+# one data unit -> a Data container; 'chi2f' fits an extra variance term
+unit = DataUnit(x, y, yerr=yerr, stat='chi2f')
 data = Data([('d', unit)])
 
-# a linear model; freeze the intrinsic-scatter parameter
+# a linear model; slope k, intercept b, and log intrinsic scatter logv are all free
 model = line()
-model.params[r'log$v$'].frozen = True
 
 # pair data with the model and sample the posterior
 infer = BayesInfer([(data, model)])
-post = infer.emcee(nstep=1000, discard=200, resume=False, savepath='./out')
+post = infer.emcee(nstep=2000, discard=500, resume=False, savepath='./out')
 
-k, b = post.par_best_ci[0], post.par_best_ci[1]
-print(f'k = {k:.3f}, b = {b:.3f}')   # -> k ~ 2.0, b ~ 1.0
+k, b, logv = post.par_best_ci[:3]
+# recovers the slope, intercept, and intrinsic scatter sigma_int = 10**logv
+print(f'k = {k:.2f}, b = {b:.2f}, sigma_int = {10 ** logv:.2f}')   # -> ~2.0, ~1.0, ~1.0
 ```
 
 Swap `line()` for any component returned by `list_local_models()`, or
