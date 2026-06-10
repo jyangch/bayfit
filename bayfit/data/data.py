@@ -589,6 +589,28 @@ class DataUnit:
 
         return cls.from_dataframe(df)
 
+    @classmethod
+    def from_npz(cls, path):
+        """Construct a :class:`DataUnit` by reading a NumPy ``.npz`` archive.
+
+        The archive must contain arrays under the keys accepted by
+        :meth:`from_dict` (``'xs'``, ``'ys'``, ``'yerr'`` required; ``'xerr'``,
+        ``'ups'``, ``'los'``, ``'stat'``, ``'weight'`` optional). Delegates to
+        :meth:`from_dict`.
+
+        Args:
+            path: Path to the ``.npz`` file.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
+            KeyError: If the archive is missing ``'xs'``, ``'ys'``, or ``'yerr'``.
+        """
+
+        with np.load(path) as npz:
+            data = dict(npz)
+
+        return cls.from_dict(data)
+
     @property
     def info(self):
         """Tabular :class:`Info` view of the unit's point count, statistic, and limit counts."""
