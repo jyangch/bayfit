@@ -81,6 +81,9 @@ class pl(Additive):
 
         x, scalar = self.asx(X)
 
+        if np.any(x <= 0):
+            raise ValueError('pl requires positive x (non-integer powers of x<=0 are undefined)')
+
         alpha = self.params[r'$\alpha$'].value
         amp = 10 ** self.params[r'log$A$'].value
 
@@ -101,7 +104,7 @@ class expd(Additive):
         self.config = OrderedDict()
 
         self.params = OrderedDict()
-        self.params[r'$\tau$'] = Par(5, unif(0, 10))
+        self.params[r'$\tau$'] = Par(5, unif(1e-3, 10))
         self.params[r'log$A$'] = Par(0, unif(-10, 10))
 
     def func(self, X):
