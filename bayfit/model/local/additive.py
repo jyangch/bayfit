@@ -124,6 +124,204 @@ class expd(Additive):
         return y[0] if scalar else y
 
 
+class sbpl(Additive):
+    """Smoothly broken power law (Kaneko et al. 2006, ``10.1086/505911``)."""
+
+    def __init__(self):
+        """Initialise sbpl; params switch on ``vfv_peak`` config."""
+
+        self.expr = 'sbpl'
+        self.comment = 'smoothly broken power-law model'
+
+        self.config = OrderedDict()
+        self.config['pivot'] = Cfg(1.0)
+
+        self.params = OrderedDict()
+        self.params[r'$\alpha_1$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_2$'] = Par(0, unif(-10, 10))
+        self.params[r'log$x_b$'] = Par(2, unif(0, 4))
+        self.params[r'$\delta$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'log$A$'] = Par(0, unif(-10, 10))
+
+    @staticmethod
+    def _log_cosh(q):
+
+        return np.logaddexp(q, -q) - np.log(2.0)
+
+    def func(self, X):
+
+        x, scalar = self.asx(X)
+
+        if np.any(x <= 0):
+            raise ValueError('sbpl requires positive x (evaluated on a log scale)')
+
+        xpiv = self.config['pivot'].value
+
+        alpha1 = self.params[r'$\alpha_1$'].value
+        alpha2 = self.params[r'$\alpha_2$'].value
+        xb = 10 ** self.params[r'log$x_b$'].value
+        delta = self.params[r'$\delta$'].value
+        amp = 10 ** self.params[r'log$A$'].value
+
+        b = (alpha1 + alpha2) / 2
+        m = (alpha2 - alpha1) / 2
+
+        q = np.log10(x / xb) / delta
+        qpiv = np.log10(xpiv / xb) / delta
+
+        a = m * delta * self._log_cosh(q)
+        apiv = m * delta * self._log_cosh(qpiv)
+
+        y = amp * (x / xpiv) ** b * 10 ** (a - apiv)
+
+        return y[0] if scalar else y
+
+
+class dsbpl(Additive):
+    """Double smoothly broken power law (three segments, two smooth breaks)."""
+
+    def __init__(self):
+        """Initialise double sbpl with three indices and two breaks."""
+
+        self.expr = 'dsbpl'
+        self.comment = 'double smoothly broken power-law model'
+
+        self.config = OrderedDict()
+        self.config['pivot'] = Cfg(1.0)
+
+        self.params = OrderedDict()
+        self.params[r'$\alpha_1$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_2$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_3$'] = Par(0, unif(-10, 10))
+        self.params[r'log$x_{b1}$'] = Par(2, unif(0, 4))
+        self.params[r'log$x_{b2}$'] = Par(2, unif(0, 4))
+        self.params[r'$\delta_1$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'$\delta_2$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'log$A$'] = Par(0, unif(-10, 10))
+
+    @staticmethod
+    def _log_cosh(q):
+
+        return np.logaddexp(q, -q) - np.log(2.0)
+
+    def func(self, X):
+
+        x, scalar = self.asx(X)
+
+        if np.any(x <= 0):
+            raise ValueError('dsbpl requires positive x (evaluated on a log scale)')
+
+        xpiv = self.config['pivot'].value
+
+        alpha1 = self.params[r'$\alpha_1$'].value
+        alpha2 = self.params[r'$\alpha_2$'].value
+        alpha3 = self.params[r'$\alpha_3$'].value
+        xb1 = 10 ** self.params[r'log$x_{b1}$'].value
+        xb2 = 10 ** self.params[r'log$x_{b2}$'].value
+        delta1 = self.params[r'$\delta_1$'].value
+        delta2 = self.params[r'$\delta_2$'].value
+        amp = 10 ** self.params[r'log$A$'].value
+
+        b = 0.5 * (alpha1 + alpha3)
+        m1 = 0.5 * (alpha2 - alpha1)
+        m2 = 0.5 * (alpha3 - alpha2)
+
+        q1 = np.log10(x / xb1) / delta1
+        q2 = np.log10(x / xb2) / delta2
+
+        qpiv1 = np.log10(xpiv / xb1) / delta1
+        qpiv2 = np.log10(xpiv / xb2) / delta2
+
+        a1 = m1 * delta1 * self._log_cosh(q1)
+        a2 = m2 * delta2 * self._log_cosh(q2)
+
+        apiv1 = m1 * delta1 * self._log_cosh(qpiv1)
+        apiv2 = m2 * delta2 * self._log_cosh(qpiv2)
+
+        y = amp * (x / xpiv) ** b * 10.0 ** ((a1 + a2) - (apiv1 + apiv2))
+
+        return y[0] if scalar else y
+
+
+class tsbpl(Additive):
+    """Triple smoothly broken power law (four segments, three smooth breaks)."""
+
+    def __init__(self):
+        """Initialise triple sbpl with four indices and three breaks."""
+
+        self.expr = 'tsbpl'
+        self.comment = 'triple smoothly broken power-law model'
+
+        self.config = OrderedDict()
+        self.config['pivot'] = Cfg(1.0)
+
+        self.params = OrderedDict()
+        self.params[r'$\alpha_1$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_2$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_3$'] = Par(0, unif(-10, 10))
+        self.params[r'$\alpha_4$'] = Par(0, unif(-10, 10))
+        self.params[r'log$x_{b1}$'] = Par(2, unif(0, 4))
+        self.params[r'log$x_{b2}$'] = Par(2, unif(0, 4))
+        self.params[r'log$x_{b3}$'] = Par(2, unif(0, 4))
+        self.params[r'$\delta_1$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'$\delta_2$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'$\delta_3$'] = Par(0.3, unif(1e-3, 3))
+        self.params[r'log$A$'] = Par(0, unif(-10, 10))
+
+    @staticmethod
+    def _log_cosh(q):
+
+        return np.logaddexp(q, -q) - np.log(2.0)
+
+    def func(self, X):
+        """Return the tsbpl photon spectrum, joining four power laws."""
+
+        x, scalar = self.asx(X)
+
+        if np.any(x <= 0):
+            raise ValueError('tsbpl requires positive x (evaluated on a log scale)')
+
+        xpiv = self.config['pivot'].value
+
+        alpha1 = self.params[r'$\alpha_1$'].value
+        alpha2 = self.params[r'$\alpha_2$'].value
+        alpha3 = self.params[r'$\alpha_3$'].value
+        alpha4 = self.params[r'$\alpha_4$'].value
+        xb1 = 10 ** self.params[r'log$x_{b1}$'].value
+        xb2 = 10 ** self.params[r'log$x_{b2}$'].value
+        xb3 = 10 ** self.params[r'log$x_{b3}$'].value
+        delta1 = self.params[r'$\delta_1$'].value
+        delta2 = self.params[r'$\delta_2$'].value
+        delta3 = self.params[r'$\delta_3$'].value
+        amp = 10 ** self.params[r'log$A$'].value
+
+        b = 0.5 * (alpha1 + alpha4)
+        m1 = 0.5 * (alpha2 - alpha1)
+        m2 = 0.5 * (alpha3 - alpha2)
+        m3 = 0.5 * (alpha4 - alpha3)
+
+        q1 = np.log10(x / xb1) / delta1
+        q2 = np.log10(x / xb2) / delta2
+        q3 = np.log10(x / xb3) / delta3
+
+        qpiv1 = np.log10(xpiv / xb1) / delta1
+        qpiv2 = np.log10(xpiv / xb2) / delta2
+        qpiv3 = np.log10(xpiv / xb3) / delta3
+
+        a1 = m1 * delta1 * self._log_cosh(q1)
+        a2 = m2 * delta2 * self._log_cosh(q2)
+        a3 = m3 * delta3 * self._log_cosh(q3)
+
+        apiv1 = m1 * delta1 * self._log_cosh(qpiv1)
+        apiv2 = m2 * delta2 * self._log_cosh(qpiv2)
+        apiv3 = m3 * delta3 * self._log_cosh(qpiv3)
+
+        shape_term = (a1 + a2 + a3) - (apiv1 + apiv2 + apiv3)
+        y = amp * (x / xpiv) ** b * 10.0**shape_term
+
+        return y[0] if scalar else y
+
+
 class spindown(Additive):
     """Magnetar spin-down luminosity model solved via an ODE for the spin frequency."""
 
