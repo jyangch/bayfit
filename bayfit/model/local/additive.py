@@ -1,10 +1,10 @@
 """Additive curve components for generic x/y curve fitting.
 
 Each class implements a concrete analytic family (linear, power-law,
-exponential decay, broken lines, broken power-laws, smoothly broken
-power-laws, magnetar spin-down, power spectral density) and returns the
-model value from :meth:`func`. The input ``X`` is a 2-D array whose
-first column ``X[:, 0]`` carries the x-grid.
+exponential decay, single/double/triple smoothly broken power-laws,
+magnetar spin-down, power spectral density) and returns the model value
+from :meth:`func`. The input ``X`` is a 2-D array whose first column
+``X[:, 0]`` carries the x-grid.
 """
 
 from collections import OrderedDict
@@ -73,10 +73,15 @@ class pl(Additive):
         r"""Return the power-law :math:`10^{\mathrm{logA}} \, x^{\alpha}` on ``X[:, 0]``.
 
         Args:
-            X: 2-D input array; the x-grid is taken from column 0.
+            X: 2-D input array; the x-grid is taken from column 0 and must be
+                strictly positive.
 
         Returns:
             1-D array of model values with the same length as ``X``.
+
+        Raises:
+            ValueError: If any ``x`` is non-positive (non-integer powers of
+                ``x <= 0`` are undefined).
         """
 
         x, scalar = self.asx(X)
@@ -148,10 +153,40 @@ class sbpl(Additive):
 
     @staticmethod
     def _log_cosh(q):
+        r"""Return :math:`\ln\cosh q`, computed stably via :func:`numpy.logaddexp`.
+
+        Equivalent to ``log(cosh(q))`` but avoids overflow for large ``|q|``.
+
+        Args:
+            q: Array of dimensionless log-scale distances from a break.
+
+        Returns:
+            Array of :math:`\ln\cosh q` with the same shape as ``q``.
+        """
 
         return np.logaddexp(q, -q) - np.log(2.0)
 
     def func(self, X):
+        r"""Return the smoothly broken power law evaluated on ``X[:, 0]``.
+
+        Implements the Kaneko et al. (2006) SBPL: a power law of mean slope
+        :math:`b = (\alpha_1 + \alpha_2)/2` whose local index transitions
+        smoothly from :math:`\alpha_1` (low ``x``) to :math:`\alpha_2`
+        (high ``x``) across a break at :math:`x_b` with smoothness
+        :math:`\delta`. The curve is normalised to the amplitude :math:`A`
+        at the ``pivot`` config value.
+
+        Args:
+            X: Scalar, 1-D, or 2-D input; the x-grid is taken from column 0
+                and must be strictly positive.
+
+        Returns:
+            Model values matching the input sampling (scalar in, scalar out).
+
+        Raises:
+            ValueError: If any ``x`` is non-positive (the model lives on a
+                log scale).
+        """
 
         x, scalar = self.asx(X)
 
@@ -204,10 +239,40 @@ class dsbpl(Additive):
 
     @staticmethod
     def _log_cosh(q):
+        r"""Return :math:`\ln\cosh q`, computed stably via :func:`numpy.logaddexp`.
+
+        Equivalent to ``log(cosh(q))`` but avoids overflow for large ``|q|``.
+
+        Args:
+            q: Array of dimensionless log-scale distances from a break.
+
+        Returns:
+            Array of :math:`\ln\cosh q` with the same shape as ``q``.
+        """
 
         return np.logaddexp(q, -q) - np.log(2.0)
 
     def func(self, X):
+        r"""Return the double smoothly broken power law on ``X[:, 0]``.
+
+        Three power-law segments joined by two smooth breaks
+        (:math:`x_{b1}, x_{b2}`): the local index runs
+        :math:`\alpha_1 \to \alpha_2 \to \alpha_3` with mean slope
+        :math:`b = (\alpha_1 + \alpha_3)/2`, each break smoothed by its own
+        :math:`\delta_i`. The curve is normalised to the amplitude
+        :math:`A` at the ``pivot`` config value.
+
+        Args:
+            X: Scalar, 1-D, or 2-D input; the x-grid is taken from column 0
+                and must be strictly positive.
+
+        Returns:
+            Model values matching the input sampling (scalar in, scalar out).
+
+        Raises:
+            ValueError: If any ``x`` is non-positive (the model lives on a
+                log scale).
+        """
 
         x, scalar = self.asx(X)
 
@@ -273,11 +338,40 @@ class tsbpl(Additive):
 
     @staticmethod
     def _log_cosh(q):
+        r"""Return :math:`\ln\cosh q`, computed stably via :func:`numpy.logaddexp`.
+
+        Equivalent to ``log(cosh(q))`` but avoids overflow for large ``|q|``.
+
+        Args:
+            q: Array of dimensionless log-scale distances from a break.
+
+        Returns:
+            Array of :math:`\ln\cosh q` with the same shape as ``q``.
+        """
 
         return np.logaddexp(q, -q) - np.log(2.0)
 
     def func(self, X):
-        """Return the tsbpl photon spectrum, joining four power laws."""
+        r"""Return the triple smoothly broken power law on ``X[:, 0]``.
+
+        Four power-law segments joined by three smooth breaks
+        (:math:`x_{b1}, x_{b2}, x_{b3}`): the local index runs
+        :math:`\alpha_1 \to \alpha_2 \to \alpha_3 \to \alpha_4` with mean
+        slope :math:`b = (\alpha_1 + \alpha_4)/2`, each break smoothed by its
+        own :math:`\delta_i`. The curve is normalised to the amplitude
+        :math:`A` at the ``pivot`` config value.
+
+        Args:
+            X: Scalar, 1-D, or 2-D input; the x-grid is taken from column 0
+                and must be strictly positive.
+
+        Returns:
+            Model values matching the input sampling (scalar in, scalar out).
+
+        Raises:
+            ValueError: If any ``x`` is non-positive (the model lives on a
+                log scale).
+        """
 
         x, scalar = self.asx(X)
 
