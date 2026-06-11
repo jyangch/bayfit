@@ -134,12 +134,18 @@ class Info:
     def from_list_dict(cls, list_dict):
         """Build an ``Info`` from a list of row dictionaries.
 
+        An empty list yields an empty ``Info`` (no columns, no rows).
+
         Raises:
-            TypeError: If ``list_dict`` is not a non-empty list of dicts.
+            TypeError: If ``list_dict`` is not a list, or its rows are not
+                dicts.
         """
 
         if not isinstance(list_dict, list):
             raise TypeError('expected an instance of list')
+
+        if not list_dict:
+            return cls({})
 
         if not isinstance(list_dict[0], dict):
             raise TypeError('expected an instance of dict')
