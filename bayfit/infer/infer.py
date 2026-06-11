@@ -513,6 +513,12 @@ class Infer:
         return [value for model in self.Model for value in model.ys]
 
     @property
+    def model_ys_Isigma(self):
+        """Per-unit model 1-sigma posterior bands ``(2, npoint)`` flattened across pairs."""
+
+        return [value for model in self.Model for value in model.ys_Isigma]
+
+    @property
     def residuals(self):
         """Per-unit sigma residuals ``(y - model) / yerr`` for diagnostics/plots.
 

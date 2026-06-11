@@ -107,9 +107,9 @@ class Plot:
 
             fig.add_trace(unit)
 
-            fig.update_xaxes(title_text='X', type='log' if xlog else 'linear')
-            fig.update_yaxes(title_text='Y', type='log' if ylog else 'linear')
-            fig.update_layout(template='plotly_white', height=600, width=600)
+            fig.update_xaxes(title_text='X', type='log' if xlog else 'linear', showgrid=True)
+            fig.update_yaxes(title_text='Y', type='log' if ylog else 'linear', showgrid=True)
+            fig.update_layout(template='simple_white', height=600, width=600)
             fig.update_layout(legend=dict(x=1, y=1, xanchor='right', yanchor='bottom'))
 
         elif ploter == 'matplotlib':
@@ -117,7 +117,7 @@ class Plot:
             rcParams['font.size'] = 12
             rcParams['pdf.fonttype'] = 42
 
-            fig = plt.figure(figsize=(7, 6))
+            fig = plt.figure(figsize=(6, 6))
             gs = fig.add_gridspec(1, 1, wspace=0, hspace=0)
             ax = fig.add_subplot(gs[0, 0])
 
@@ -126,7 +126,8 @@ class Plot:
                 ys,
                 xerr=xerr,
                 yerr=yerr,
-                fmt='none',
+                fmt='o',
+                markersize=3,
                 ecolor=Plot.colors[0],
                 elinewidth=1.0,
                 capsize=0,
@@ -176,7 +177,7 @@ class Plot:
             rcParams['font.family'] = 'sans-serif'
             rcParams['font.size'] = 12
             rcParams['pdf.fonttype'] = 42
-            fig = plt.figure(figsize=(7, 6))
+            fig = plt.figure(figsize=(6, 6))
             gs = fig.add_gridspec(1, 1, wspace=0, hspace=0)
             ax = fig.add_subplot(gs[0, 0])
 
@@ -223,7 +224,8 @@ class Plot:
                     ys[i],
                     xerr=xerr[i],
                     yerr=yerr[i],
-                    fmt='none',
+                    fmt='o',
+                    markersize=3,
                     ecolor=Plot.colors[i],
                     elinewidth=0.8,
                     capsize=0,
@@ -239,9 +241,9 @@ class Plot:
             }
 
         if ploter == 'plotly':
-            fig.update_xaxes(title_text='X', type='log' if logx else 'linear')
-            fig.update_yaxes(title_text='Y', type='log' if logy else 'linear')
-            fig.update_layout(template='plotly_white', height=600, width=600)
+            fig.update_xaxes(title_text='X', type='log' if logx else 'linear', showgrid=True)
+            fig.update_yaxes(title_text='Y', type='log' if logy else 'linear', showgrid=True)
+            fig.update_layout(template='simple_white', height=600, width=600)
             fig.update_layout(legend=dict(x=1, y=1, xanchor='right', yanchor='bottom'))
 
         elif ploter == 'matplotlib':
@@ -315,7 +317,7 @@ class Plot:
             rcParams['font.family'] = 'sans-serif'
             rcParams['font.size'] = 12
             rcParams['pdf.fonttype'] = 42
-            fig = plt.figure(figsize=(6, 8))
+            fig = plt.figure(figsize=(6, 6))
             gs = fig.add_gridspec(4, 1, wspace=0, hspace=0)
             ax1 = fig.add_subplot(gs[0:3, 0])
             ax2 = fig.add_subplot(gs[3, 0], sharex=ax1)
@@ -355,7 +357,7 @@ class Plot:
                         thickness=1.5,
                         width=0,
                     ),
-                    marker=dict(symbol='cross-thin', size=0, color=Plot.colors[i]),
+                    marker=dict(symbol='circle', size=3, color=Plot.colors[i]),
                 )
                 mo = go.Scatter(
                     x=obs_xs[i].astype(float),
@@ -389,7 +391,8 @@ class Plot:
                     obs_ys[i],
                     xerr=obs_xerr[i],
                     yerr=obs_yerr[i],
-                    fmt='none',
+                    fmt='o',
+                    markersize=3,
                     ecolor=Plot.colors[i],
                     elinewidth=0.8,
                     capsize=0,
@@ -413,11 +416,17 @@ class Plot:
             }
 
         if ploter == 'plotly':
-            fig.update_xaxes(title_text='', row=1, col=1, type='log' if xlog else 'linear')
-            fig.update_xaxes(title_text='X', row=2, col=1, type='log' if xlog else 'linear')
-            fig.update_yaxes(title_text='Y', row=1, col=1, type='log' if ylog else 'linear')
-            fig.update_yaxes(title_text='Sigma', showgrid=False, range=[-3.5, 3.5], row=2, col=1)
-            fig.update_layout(template='plotly_white', height=700, width=600)
+            fig.update_xaxes(
+                title_text='', row=1, col=1, type='log' if xlog else 'linear', showgrid=True
+            )
+            fig.update_xaxes(
+                title_text='X', row=2, col=1, type='log' if xlog else 'linear', showgrid=True
+            )
+            fig.update_yaxes(
+                title_text='Y', row=1, col=1, type='log' if ylog else 'linear', showgrid=True
+            )
+            fig.update_yaxes(title_text='Sigma', range=[-3.5, 3.5], row=2, col=1, showgrid=True)
+            fig.update_layout(template='simple_white', height=600, width=600)
             fig.update_layout(legend=dict(x=1, y=1, xanchor='right', yanchor='bottom'))
 
         elif ploter == 'matplotlib':
@@ -487,7 +496,7 @@ class Plot:
         return Figure(fig, fig_data, 'matplotlib')
 
     @staticmethod
-    def infer(cls, ploter='plotly', xlog=False, ylog=False, at_par=None):
+    def infer(cls, ploter='plotly', xlog=False, ylog=False, post=False, at_par=None):
         """Plot data vs. inferred model (with residuals) from an ``Infer``.
 
         Args:
@@ -496,6 +505,9 @@ class Plot:
             ploter: Backend -- ``'plotly'`` or ``'matplotlib'``.
             xlog: If ``True``, use a logarithmic scale for the x-axis.
             ylog: If ``True``, use a logarithmic scale for the y-axis.
+            post: If ``True``, overlay the posterior 1-sigma predictive band
+                (from the model's :attr:`~bayfit.model.model.Model.ys_Isigma`)
+                behind the best-fit curve.
             at_par: Which parameter point to evaluate the model at --
                 ``'best'``, ``'best-ci'``, ``'median'``, ``'mean'``, or
                 ``'truth'``. Defaults to ``'best'`` for ``Posterior`` and
@@ -512,6 +524,10 @@ class Plot:
 
         if not isinstance(cls, Infer):
             raise TypeError('cls is not Infer type, cannot call infer method')
+
+        # Posterior 1-sigma band; func_sample mutates params, so compute it
+        # before the at_par block below re-establishes the central point.
+        mo_band = cls.model_ys_Isigma if post else None
 
         if at_par is None:
             if isinstance(cls, Posterior):
@@ -553,7 +569,7 @@ class Plot:
             rcParams['font.family'] = 'sans-serif'
             rcParams['font.size'] = 12
             rcParams['pdf.fonttype'] = 42
-            fig = plt.figure(figsize=(6, 8))
+            fig = plt.figure(figsize=(6, 6))
             gs = fig.add_gridspec(4, 1, wspace=0, hspace=0)
             ax1 = fig.add_subplot(gs[0:3, 0])
             ax2 = fig.add_subplot(gs[3, 0], sharex=ax1)
@@ -592,7 +608,7 @@ class Plot:
                         thickness=1.5,
                         width=0,
                     ),
-                    marker=dict(symbol='cross-thin', size=0, color=Plot.colors[i]),
+                    marker=dict(symbol='circle', size=3, color=Plot.colors[i]),
                 )
                 mo = go.Scatter(
                     x=obs_xs[i].astype(float),
@@ -616,17 +632,55 @@ class Plot:
                     ),
                 )
 
+                if post:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=obs_xs[i].astype(float),
+                            y=mo_band[i][0].astype(float),
+                            mode='lines',
+                            line=dict(width=0),
+                            showlegend=False,
+                            hoverinfo='skip',
+                        ),
+                        row=1,
+                        col=1,
+                    )
+                    fig.add_trace(
+                        go.Scatter(
+                            x=obs_xs[i].astype(float),
+                            y=mo_band[i][1].astype(float),
+                            mode='lines',
+                            line=dict(width=0),
+                            fill='tonexty',
+                            fillcolor=Plot.get_rgb(Plot.colors[i], 0.2),
+                            showlegend=False,
+                            hoverinfo='skip',
+                        ),
+                        row=1,
+                        col=1,
+                    )
+
                 fig.add_trace(obs, row=1, col=1)
                 fig.add_trace(mo, row=1, col=1)
                 fig.add_trace(res, row=2, col=1)
 
             elif ploter == 'matplotlib':
+                if post:
+                    ax1.fill_between(
+                        obs_xs[i],
+                        mo_band[i][0].astype(float),
+                        mo_band[i][1].astype(float),
+                        color=Plot.colors[i],
+                        alpha=0.2,
+                        linewidth=0,
+                    )
                 ax1.errorbar(
                     obs_xs[i],
                     obs_ys[i],
                     xerr=[obs_xerr[i][0], obs_xerr[i][1]],
                     yerr=[obs_yerr[i][0], obs_yerr[i][1]],
-                    fmt='none',
+                    fmt='o',
+                    markersize=3,
                     ecolor=Plot.colors[i],
                     elinewidth=0.8,
                     capsize=0,
@@ -650,11 +704,17 @@ class Plot:
             }
 
         if ploter == 'plotly':
-            fig.update_xaxes(title_text='', row=1, col=1, type='log' if xlog else 'linear')
-            fig.update_xaxes(title_text='X', row=2, col=1, type='log' if xlog else 'linear')
-            fig.update_yaxes(title_text='Y', row=1, col=1, type='log' if ylog else 'linear')
-            fig.update_yaxes(title_text='Sigma', showgrid=False, range=[-3.5, 3.5], row=2, col=1)
-            fig.update_layout(template='plotly_white', height=700, width=600)
+            fig.update_xaxes(
+                title_text='', row=1, col=1, type='log' if xlog else 'linear', showgrid=True
+            )
+            fig.update_xaxes(
+                title_text='X', row=2, col=1, type='log' if xlog else 'linear', showgrid=True
+            )
+            fig.update_yaxes(
+                title_text='Y', row=1, col=1, type='log' if ylog else 'linear', showgrid=True
+            )
+            fig.update_yaxes(title_text='Sigma', range=[-3.5, 3.5], row=2, col=1, showgrid=True)
+            fig.update_layout(template='simple_white', height=600, width=600)
             fig.update_layout(legend=dict(x=1, y=1, xanchor='right', yanchor='bottom'))
 
         elif ploter == 'matplotlib':
@@ -951,9 +1011,13 @@ class ModelPlot:
         if self.ploter == 'plotly':
             self.fig = go.Figure()
 
-            self.fig.update_xaxes(title_text='X', type='log' if self.xlog else 'linear')
-            self.fig.update_yaxes(title_text='Y', type='log' if self.ylog else 'linear')
-            self.fig.update_layout(template='plotly_white', height=600, width=600)
+            self.fig.update_xaxes(
+                title_text='X', type='log' if self.xlog else 'linear', showgrid=True
+            )
+            self.fig.update_yaxes(
+                title_text='Y', type='log' if self.ylog else 'linear', showgrid=True
+            )
+            self.fig.update_layout(template='simple_white', height=600, width=600)
             self.fig.update_layout(legend=dict(x=1, y=1, xanchor='right', yanchor='bottom'))
 
         elif self.ploter == 'matplotlib':
@@ -961,7 +1025,7 @@ class ModelPlot:
             rcParams['font.size'] = 12
             rcParams['pdf.fonttype'] = 42
 
-            self.fig = plt.figure(figsize=(7, 6))
+            self.fig = plt.figure(figsize=(6, 6))
             gs = self.fig.add_gridspec(1, 1, wspace=0, hspace=0)
             self.ax = self.fig.add_subplot(gs[0, 0])
 
@@ -1023,28 +1087,28 @@ class ModelPlot:
 
         self.model_index += 1
 
-        xs = np.array(X).astype(float)
+        xs = np.asarray(X).astype(float)
 
         if post:
             if at_par == 'best':
-                ys = model.best_func(X).astype(float)
+                ys = model.best_func(xs).astype(float)
             elif at_par == 'best-ci':
-                ys = model.best_ci_func(X).astype(float)
+                ys = model.best_ci_func(xs).astype(float)
             elif at_par == 'median':
-                ys = model.median_func(X).astype(float)
+                ys = model.median_func(xs).astype(float)
             elif at_par == 'mean':
-                ys = model.mean_func(X).astype(float)
+                ys = model.mean_func(xs).astype(float)
             elif at_par == 'truth':
                 if None in model.par_truth:
                     raise ValueError('no truth value for some parameters')
                 else:
-                    ys = model.truth_func(X).astype(float)
+                    ys = model.truth_func(xs).astype(float)
             else:
                 raise ValueError(f'unsupported at_par argument: {at_par}')
-            ys_sample = model.func_sample(X)
+            ys_sample = model.func_sample(xs)
             ys_ci = ys_sample['Isigma'].astype(float)
         else:
-            ys = model.func(X).astype(float)
+            ys = model.func(xs).astype(float)
 
         if self.ploter == 'plotly':
             mo = go.Scatter(

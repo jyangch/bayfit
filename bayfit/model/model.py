@@ -319,7 +319,7 @@ class Model:
         statistic kernels without further conversion.
         """
 
-        return [self.func(np.asarray(unit.xs)).astype(float) for unit in self.fit_to.data.values()]
+        return [self.func(xs).astype(float) for xs in self.fit_to.xs]
 
     @property
     def ps(self):
@@ -493,6 +493,16 @@ class Model:
             sample[i] = self.func(X)
 
         return self.sample_statistic(sample)
+
+    @property
+    def ys_Isigma(self):
+        """Per-unit posterior 1-sigma band ``(2, npoint)`` of the model on each fit x-grid.
+
+        Each element is the ``[low, high]`` envelope from :meth:`func_sample`
+        evaluated over the posterior draws; parallels :attr:`ys`.
+        """
+
+        return [self.func_sample(xs)['Isigma'].astype(float) for xs in self.fit_to.xs]
 
     def __add__(self, other):
         """Build a composite that sums this component with ``other``."""
