@@ -653,7 +653,7 @@ class Plot:
                         fill='tonexty',
                         line_color='rgba(0,0,0,0)',
                         fillcolor=Plot.get_rgb(Plot.colors[i], 0.5),
-                        showlegend=True,
+                        showlegend=False,
                     )
                     fig.add_trace(low, row=1, col=1)
                     fig.add_trace(upp, row=1, col=1)
