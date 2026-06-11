@@ -632,48 +632,35 @@ class Plot:
                     ),
                 )
 
-                if post:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=obs_xs[i].astype(float),
-                            y=mo_band[i][0].astype(float),
-                            mode='lines',
-                            line=dict(width=0),
-                            showlegend=False,
-                            hoverinfo='skip',
-                        ),
-                        row=1,
-                        col=1,
-                    )
-                    fig.add_trace(
-                        go.Scatter(
-                            x=obs_xs[i].astype(float),
-                            y=mo_band[i][1].astype(float),
-                            mode='lines',
-                            line=dict(width=0),
-                            fill='tonexty',
-                            fillcolor=Plot.get_rgb(Plot.colors[i], 0.2),
-                            showlegend=False,
-                            hoverinfo='skip',
-                        ),
-                        row=1,
-                        col=1,
-                    )
-
                 fig.add_trace(obs, row=1, col=1)
                 fig.add_trace(mo, row=1, col=1)
+
+                if post:
+                    low = go.Scatter(
+                        x=obs_xs[i].astype(float),
+                        y=mo_band[i][0].astype(float),
+                        mode='lines',
+                        name=f'{name} lower',
+                        fill=None,
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=False,
+                    )
+                    upp = go.Scatter(
+                        x=obs_xs[i].astype(float),
+                        y=mo_band[i][1].astype(float),
+                        mode='lines',
+                        name=f'{name} CI',
+                        fill='tonexty',
+                        line_color='rgba(0,0,0,0)',
+                        fillcolor=Plot.get_rgb(Plot.colors[i], 0.5),
+                        showlegend=True,
+                    )
+                    fig.add_trace(low, row=1, col=1)
+                    fig.add_trace(upp, row=1, col=1)
+
                 fig.add_trace(res, row=2, col=1)
 
             elif ploter == 'matplotlib':
-                if post:
-                    ax1.fill_between(
-                        obs_xs[i],
-                        mo_band[i][0].astype(float),
-                        mo_band[i][1].astype(float),
-                        color=Plot.colors[i],
-                        alpha=0.2,
-                        linewidth=0,
-                    )
                 ax1.errorbar(
                     obs_xs[i],
                     obs_ys[i],
@@ -688,6 +675,15 @@ class Plot:
                     label=name,
                 )
                 ax1.plot(obs_xs[i], mo_ys[i], color=Plot.colors[i], lw=1.0)
+                if post:
+                    ax1.fill_between(
+                        obs_xs[i],
+                        mo_band[i][0].astype(float),
+                        mo_band[i][1].astype(float),
+                        fc=Plot.colors[i],
+                        alpha=0.5,
+                        label=f'{name} CI',
+                    )
                 ax2.scatter(
                     obs_xs[i], res_ys[i], marker='+', color=Plot.colors[i], s=40, linewidths=0.8
                 )
