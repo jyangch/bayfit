@@ -174,10 +174,19 @@ class Info:
 
     @staticmethod
     def list_to_dict(data_list):
-        """Convert a header-plus-rows list into a column-major dict."""
+        """Convert a header-plus-rows list into a column-major dict.
+
+        An empty list yields an empty dict; a header-only list (no data
+        rows) yields one empty column per key.
+        """
+
+        if not data_list:
+            return {}
 
         keys = data_list[0]
-        values = list(zip(*data_list[1:], strict=False))
+        rows = data_list[1:]
+
+        values = list(zip(*rows, strict=False)) if rows else [() for _ in keys]
 
         return {keys[i]: list(values[i]) for i in range(len(keys))}
 
