@@ -7,7 +7,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.python.org/downloads/"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?labelColor=1f2937&logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/bayfit/"><img alt="PyPI" src="https://img.shields.io/pypi/v/bayfit?color=4F46E5&labelColor=1f2937&logo=pypi&logoColor=white"></a>
+  <a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?labelColor=1f2937&logo=python&logoColor=white"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-9CA3AF?labelColor=1f2937"></a>
 </p>
 
@@ -54,19 +55,11 @@ arbitrary x/y curves.
 
 ## Installation
 
-`BayFit` is not yet packaged for PyPI. Clone the repository and install
-the dependencies, then use it from the repository root (so that
-`import bayfit` resolves):
+`BayFit` is available on PyPI:
 
 ```bash
-git clone https://github.com/jyangch/bayfit.git
-cd bayfit
-pip install numpy scipy pandas emcee matplotlib plotly corner lmfit iminuit
+pip install bayfit
 ```
-
-Core dependencies: `numpy`, `scipy`, `pandas`, `emcee`, `matplotlib`,
-`plotly`, and `corner`. Maximum-likelihood fitting additionally uses
-`lmfit` and `iminuit`.
 
 ### Optional: `MultiNest` sampler
 
